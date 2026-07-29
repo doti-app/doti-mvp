@@ -1,11 +1,8 @@
 module.exports = function handler(_request, response) {
-  const supabaseUrl =
-    process.env.SUPABASE_URL ||
-    'https://znbfxlozwoictznmgsjf.supabase.co';
+  const supabaseUrl = process.env.SUPABASE_URL;
   const supabasePublishableKey =
     process.env.SUPABASE_PUBLISHABLE_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    'sb_publishable_DlqJcO67Ydae3LbV0gCaQQ__PREHRQN';
+    process.env.SUPABASE_ANON_KEY;
 
   response.setHeader('Cache-Control', 'no-store, max-age=0');
   response.setHeader('Content-Type', 'application/json; charset=utf-8');

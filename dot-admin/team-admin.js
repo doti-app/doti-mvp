@@ -51,20 +51,19 @@ function showTeamNotice(title, message, attention = false) {
   showTeamNotice.timer = setTimeout(() => toast.classList.remove('show'), 3600);
 }
 
-async function teamRequest(method = 'GET', body) {
-  const { data: { session } } = await authContext.supabase.auth.getSession();
-  if (!session) throw new Error('Sua sessão expirou. Entre novamente.');
-  const response = await fetch('/api/team', {
-    method,
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-      'Content-Type': 'application/json'
-    },
-    body: body ? JSON.stringify(body) : undefined
+async function teamRequest(action = 'list', body = {}) {
+  const { data, error } = await authContext.supabase.functions.invoke('team-admin', {
+    body: { action, ...body }
   });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.error || 'Não foi possível concluir a operação.');
-  return result;
+  if (error) {
+    let message = error.message;
+    try {
+      const payload = await error.context?.json();
+      message = payload?.error || message;
+    } catch (_) {}
+    throw new Error(message || 'Não foi possível concluir a operação.');
+  }
+  return data;
 }
 
 function renderMetrics() {
@@ -216,7 +215,7 @@ function openInviteModal() {
     submit.textContent = 'Enviando…';
     status.textContent = '';
     try {
-      const result = await teamRequest('POST', {
+    const result = await teamRequest('invite', {
         fullName: data.get('fullName'),
         email: data.get('email'),
         role: data.get('role')
@@ -240,7 +239,7 @@ membersContainer.addEventListener('change', async event => {
   const row = select.closest('[data-member-id]');
   select.disabled = true;
   try {
-    const result = await teamRequest('PATCH', {
+    const result = await teamRequest('update_member', {
       memberId: row.dataset.memberId,
       role: select.value
     });
@@ -262,7 +261,7 @@ membersContainer.addEventListener('click', async event => {
   if (!confirm(`Deseja ${action} o acesso de ${member.full_name}?`)) return;
   button.disabled = true;
   try {
-    const result = await teamRequest('PATCH', {
+    const result = await teamRequest('update_member', {
       memberId: member.id,
       isActive: !member.is_active
     });

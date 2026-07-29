@@ -1,6 +1,18 @@
--- Execute este arquivo uma vez no SQL Editor do projeto Supabase da Doti.
+-- Doti: autenticação, agências, perfis e convites.
 
 create extension if not exists pgcrypto;
+create schema if not exists private;
+
+revoke all on schema private from public, anon, authenticated;
+
+alter default privileges for role postgres in schema public
+  revoke select, insert, update, delete on tables from anon, authenticated, service_role;
+alter default privileges for role postgres in schema public
+  revoke execute on functions from anon, authenticated, service_role;
+alter default privileges for role postgres in schema public
+  revoke usage, select on sequences from anon, authenticated, service_role;
+alter default privileges for role postgres in schema public
+  revoke execute on functions from public;
 
 create table if not exists public.agencies (
   id uuid primary key default gen_random_uuid(),
@@ -52,43 +64,62 @@ alter table public.agencies enable row level security;
 alter table public.profiles enable row level security;
 alter table public.team_invitations enable row level security;
 
-create or replace function public.current_agency_id()
+create or replace function private.current_agency_id()
 returns uuid
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, pg_catalog
 as $$
-  select agency_id from public.profiles where id = auth.uid()
+  select agency_id
+  from public.profiles
+  where id = (select auth.uid())
+    and is_active = true
 $$;
 
-create or replace function public.current_user_role()
+create or replace function private.current_user_role()
 returns text
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, pg_catalog
 as $$
-  select role from public.profiles where id = auth.uid()
+  select role
+  from public.profiles
+  where id = (select auth.uid())
+    and is_active = true
 $$;
 
-create or replace function public.current_user_is_active()
+create or replace function private.current_user_is_active()
 returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, pg_catalog
 as $$
-  select coalesce(is_active, false) from public.profiles where id = auth.uid()
+  select exists(
+    select 1
+    from public.profiles
+    where id = (select auth.uid())
+      and is_active = true
+  )
 $$;
+
+revoke all on function private.current_agency_id() from public, anon, authenticated;
+revoke all on function private.current_user_role() from public, anon, authenticated;
+revoke all on function private.current_user_is_active() from public, anon, authenticated;
+grant usage on schema private to authenticated;
+grant execute on function private.current_agency_id() to authenticated;
+grant execute on function private.current_user_role() to authenticated;
+grant execute on function private.current_user_is_active() to authenticated;
 
 drop policy if exists "Members can view their agency" on public.agencies;
 create policy "Members can view their agency"
 on public.agencies for select
 to authenticated
 using (
-  id = public.current_agency_id()
-  and public.current_user_is_active()
+  id = private.current_agency_id()
+  and private.current_user_is_active()
 );
 
 drop policy if exists "Owners and admins can update their agency" on public.agencies;
@@ -96,14 +127,14 @@ create policy "Owners and admins can update their agency"
 on public.agencies for update
 to authenticated
 using (
-  id = public.current_agency_id()
-  and public.current_user_is_active()
-  and public.current_user_role() in ('owner', 'admin')
+  id = private.current_agency_id()
+  and private.current_user_is_active()
+  and private.current_user_role() in ('owner', 'admin')
 )
 with check (
-  id = public.current_agency_id()
-  and public.current_user_is_active()
-  and public.current_user_role() in ('owner', 'admin')
+  id = private.current_agency_id()
+  and private.current_user_is_active()
+  and private.current_user_role() in ('owner', 'admin')
 );
 
 drop policy if exists "Members can view agency profiles" on public.profiles;
@@ -111,8 +142,8 @@ create policy "Members can view agency profiles"
 on public.profiles for select
 to authenticated
 using (
-  agency_id = public.current_agency_id()
-  and public.current_user_is_active()
+  agency_id = private.current_agency_id()
+  and private.current_user_is_active()
 );
 
 drop policy if exists "Owners and admins can view invitations" on public.team_invitations;
@@ -120,28 +151,31 @@ create policy "Owners and admins can view invitations"
 on public.team_invitations for select
 to authenticated
 using (
-  agency_id = public.current_agency_id()
-  and public.current_user_is_active()
-  and public.current_user_role() in ('owner', 'admin')
+  agency_id = private.current_agency_id()
+  and private.current_user_is_active()
+  and private.current_user_role() in ('owner', 'admin')
 );
 
 drop policy if exists "Users can update their own profile" on public.profiles;
 create policy "Users can update their own profile"
 on public.profiles for update
 to authenticated
-using (id = auth.uid())
+using (
+  id = (select auth.uid())
+  and private.current_user_is_active()
+)
 with check (
-  id = auth.uid()
-  and agency_id = public.current_agency_id()
-  and role = public.current_user_role()
-  and is_active = public.current_user_is_active()
+  id = (select auth.uid())
+  and agency_id = private.current_agency_id()
+  and role = private.current_user_role()
+  and is_active = true
 );
 
-create or replace function public.handle_new_doti_user()
+create or replace function private.handle_new_doti_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, pg_catalog
 as $$
 declare
   new_agency_id uuid;
@@ -194,11 +228,13 @@ $$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
-  for each row execute procedure public.handle_new_doti_user();
+  for each row execute procedure private.handle_new_doti_user();
 
-create or replace function public.set_updated_at()
+create or replace function private.set_updated_at()
 returns trigger
 language plpgsql
+security invoker
+set search_path = public, pg_catalog
 as $$
 begin
   new.updated_at = now();
@@ -209,22 +245,17 @@ $$;
 drop trigger if exists agencies_set_updated_at on public.agencies;
 create trigger agencies_set_updated_at
 before update on public.agencies
-for each row execute procedure public.set_updated_at();
+for each row execute procedure private.set_updated_at();
 
 drop trigger if exists profiles_set_updated_at on public.profiles;
 create trigger profiles_set_updated_at
 before update on public.profiles
-for each row execute procedure public.set_updated_at();
+for each row execute procedure private.set_updated_at();
 
 grant usage on schema public to authenticated;
-revoke all on function public.current_agency_id() from public, anon;
-revoke all on function public.current_user_role() from public, anon;
-revoke all on function public.current_user_is_active() from public, anon;
-revoke all on function public.handle_new_doti_user() from public, anon, authenticated;
-revoke all on function public.set_updated_at() from public, anon, authenticated;
-grant execute on function public.current_agency_id() to authenticated;
-grant execute on function public.current_user_role() to authenticated;
-grant execute on function public.current_user_is_active() to authenticated;
+revoke all on function private.handle_new_doti_user() from public, anon, authenticated;
+revoke all on function private.set_updated_at() from public, anon, authenticated;
 grant select, update on public.agencies to authenticated;
 grant select, update on public.profiles to authenticated;
 grant select on public.team_invitations to authenticated;
+grant select, insert, update, delete on public.agencies, public.profiles, public.team_invitations to service_role;

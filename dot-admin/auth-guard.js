@@ -34,8 +34,8 @@ async function protectPanel() {
       return;
     }
 
-    const fullName = profile?.full_name || user.user_metadata?.full_name || user.email.split('@')[0];
-    const agencyName = profile?.agency_name || user.user_metadata?.agency_name || 'Sua agência';
+    const fullName = profile.full_name;
+    const agencyName = profile.agency_name;
     const roleLabels = {
       owner: 'proprietário',
       admin: 'administrador',
@@ -66,7 +66,10 @@ async function protectPanel() {
       location.replace('/dot-admin/');
     });
 
-    supabase.auth.onAuthStateChange(event => {
+    supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (nextSession && window.dotiAuthContext) {
+        window.dotiAuthContext.session = nextSession;
+      }
       if (event === 'SIGNED_OUT') location.replace('/dot-admin/');
     });
     document.documentElement.classList.remove('auth-pending');
