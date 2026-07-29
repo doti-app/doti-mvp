@@ -11,11 +11,22 @@ async function protectPanel() {
     }
 
     const user = session.user;
-    const { data: profile } = await supabase
+    let { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id, agency_id, email, full_name, agency_name, role, is_active')
       .eq('id', user.id)
       .maybeSingle();
+
+    if (profileError && String(profileError.message).includes('is_active')) {
+      const fallback = await supabase
+        .from('profiles')
+        .select('id, agency_id, email, full_name, agency_name, role')
+        .eq('id', user.id)
+        .maybeSingle();
+      profile = fallback.data ? { ...fallback.data, is_active: true } : null;
+      profileError = fallback.error;
+    }
+    if (profileError) throw profileError;
 
     if (!profile || profile.is_active === false) {
       await supabase.auth.signOut();
