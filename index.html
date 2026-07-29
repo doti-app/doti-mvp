@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Doti — operação interna para agências de marketing">
+  <title>Doti - Operação da agência</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles-extra.css">
+  <link rel="stylesheet" href="functional.css">
+  <script src="dot-admin/auth-guard.js"></script>
+</head>
+<body>
+  <div class="app-shell" id="appShell">
+    <aside class="sidebar">
+      <div class="sidebar-brand-area">
+        <a class="brand" href="#" data-page-target="dashboard" aria-label="Ir para a visão geral">
+          <img class="brand-full" src="assets/doti-logo.png" alt="Doti">
+          <img class="brand-compact" src="assets/doti.png" alt="" aria-hidden="true">
+        </a>
+        <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-expanded="true" aria-label="Minimizar menu lateral" title="Minimizar menu lateral">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M9 4v16"></path></svg>
+        </button>
+      </div>
+      <nav class="nav" aria-label="Menu principal">
+        <button class="nav-item active" data-page="dashboard" data-label="Visão geral" title="Visão geral"><span class="nav-icon">⌂</span><span class="nav-label">Visão geral</span></button>
+        <button class="nav-item" data-page="demandas" data-label="Demandas" title="Demandas"><span class="nav-icon">□</span><span class="nav-label">Demandas</span><b id="demandNavCount">0</b></button>
+        <button class="nav-item" data-page="fluxos" data-label="Fluxos" title="Fluxos"><span class="nav-icon">↝</span><span class="nav-label">Fluxos</span><b id="workflowNavCount">0</b></button>
+        <button class="nav-item" data-page="clientes" data-label="Clientes" title="Clientes"><span class="nav-icon">◇</span><span class="nav-label">Clientes</span><b id="clientNavCount">0</b></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="storage-note"><i></i><span>Dados salvos neste navegador</span></div>
+        <div class="profile"><div class="avatar">AG</div><div><strong>Sua agência</strong><small>Ambiente interno</small></div><button class="logout-btn" id="logoutButton" type="button" aria-label="Sair da Doti" title="Sair da Doti">↗</button></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="mobile-brand"><img src="assets/doti-logo.png" alt="Doti"></div>
+        <label class="search"><span>⌕</span><input id="globalSearch" placeholder="Buscar projeto, cliente ou entregável"></label>
+        <div class="top-actions">
+          <button class="outline-btn compact" id="exportData">Exportar backup</button>
+          <button class="primary-btn" id="topNewProject">+ Novo projeto</button>
+        </div>
+      </header>
+
+      <div class="page active" id="dashboard">
+        <section class="welcome">
+          <div>
+            <p class="eyebrow" id="todayLabel"></p>
+            <h1>Visão geral</h1>
+            <p id="dashboardHeadline">Sua operação começa aqui.</p>
+          </div>
+          <button class="outline-btn" data-page-target="demandas">Abrir operação <span>→</span></button>
+        </section>
+
+        <section class="metrics" id="dashboardMetrics"></section>
+
+        <section class="dashboard-grid clean-dashboard">
+          <article class="panel dashboard-focus">
+            <div class="panel-head"><div><h2>O que precisa de atenção</h2><p id="attentionSubtitle">Calculado a partir dos seus prazos e etapas</p></div></div>
+            <div id="attentionList"></div>
+          </article>
+          <article class="panel quick-start">
+            <div class="panel-head"><div><h2>Ações rápidas</h2><p>Comece ou continue a operação</p></div></div>
+            <button class="quick-action" id="dashboardNewProject"><span>＋</span><div><strong>Criar projeto</strong><small>Escolha os fluxos e gere os entregáveis</small></div><b>→</b></button>
+            <button class="quick-action" data-page-target="fluxos"><span>↝</span><div><strong>Configurar fluxos</strong><small>Adapte etapas e responsáveis</small></div><b>→</b></button>
+            <button class="quick-action" id="importData"><span>⇧</span><div><strong>Importar backup</strong><small>Restaure um arquivo exportado pelo Doti</small></div><b>→</b></button>
+            <input type="file" id="importFile" accept="application/json" hidden>
+          </article>
+        </section>
+
+        <section class="panel recent-panel">
+          <div class="panel-head"><div><h2>Projetos recentes</h2><p>Atualizados conforme você trabalha</p></div><button data-page-target="demandas">Ver todos</button></div>
+          <div id="recentProjects"></div>
+        </section>
+      </div>
+
+      <div class="page" id="demandas">
+        <section class="page-title">
+          <div><p class="eyebrow">OPERAÇÃO</p><h1>Demandas</h1><p>Gerencie projetos, entregáveis, etapas e tarefas.</p></div>
+          <button class="primary-btn" id="newDemand">+ Novo projeto</button>
+        </section>
+        <section class="operation-summary" id="operationSummary"></section>
+        <div class="toolbar">
+          <div class="tabs"><button class="active" data-view="board">Quadro</button><button data-view="projects">Projetos</button><button data-view="calendar">Calendário</button></div>
+          <span class="sort-indicator">↕ Próximo prazo primeiro</span>
+          <select class="filter group-filter" id="groupFilter" aria-label="Filtrar pelo grupo responsável">
+            <option value="all">Todos os grupos</option>
+          </select>
+          <select class="filter client-filter" id="clientFilter" aria-label="Filtrar por cliente">
+            <option value="all">Todos os clientes</option>
+          </select>
+          <select class="filter" id="statusFilter" aria-label="Filtrar por situação">
+            <option value="all">Todas as situações</option>
+            <option value="planning">Entrada</option>
+            <option value="production">Produção</option>
+            <option value="approval">Aprovação</option>
+            <option value="done">Concluído</option>
+          </select>
+          <label class="mini-search">⌕ <input id="demandSearch" placeholder="Buscar"></label>
+        </div>
+        <section class="kanban" id="deliverablesBoard"></section>
+        <section class="projects-view" id="projectsView" hidden></section>
+        <section class="calendar-view" id="calendarView" hidden></section>
+      </div>
+
+      <div class="page" id="fluxos">
+        <section class="page-title">
+          <div><p class="eyebrow">AUTOMAÇÃO</p><h1>Fluxos</h1><p>Modelos que geram automaticamente as etapas de cada entregável.</p></div>
+          <button class="primary-btn" id="newWorkflow">+ Novo fluxo</button>
+        </section>
+        <section class="workflow-stats" id="workflowStats"></section>
+        <div class="workflow-toolbar">
+          <div><button class="active" data-flow-view="models">Modelos</button><button data-flow-view="groups">Grupos</button></div>
+          <span>Editar um modelo não altera entregáveis já iniciados.</span>
+        </div>
+        <section class="workflow-grid" id="workflowGrid"></section>
+        <section class="groups-panel" id="groupsPanel" hidden></section>
+      </div>
+
+      <div class="page" id="clientes">
+        <section class="page-title clients-page-title">
+          <div><p class="eyebrow">RELACIONAMENTO</p><h1>Clientes</h1><p>Organize a carteira e personalize a identificação de cada cliente.</p></div>
+          <button class="primary-btn" id="newClient">+ Novo cliente</button>
+        </section>
+        <div id="clientDirectory">
+          <section class="client-summary" id="clientSummary"></section>
+          <div class="client-toolbar">
+            <label class="mini-search">⌕ <input id="clientSearch" placeholder="Buscar cliente"></label>
+          </div>
+          <section class="client-grid" id="clientGrid"></section>
+        </div>
+        <section class="client-workspace" id="clientWorkspace" hidden></section>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <span>✓</span><div><strong></strong><p></p></div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

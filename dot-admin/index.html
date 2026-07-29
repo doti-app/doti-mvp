@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Acesse a Doti — operação criativa para agências">
+  <title>Entrar na Doti</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="login.css">
+</head>
+<body>
+  <main class="login-experience" id="loginExperience">
+    <section class="login-story" aria-label="Conheça a Doti">
+      <div class="login-story-top">
+        <img class="login-logo" src="../assets/doti-logo.png" alt="Doti">
+        <span class="login-edition"><i></i> Operação criativa, em um só lugar</span>
+      </div>
+
+      <div class="login-story-copy">
+        <p class="login-kicker"><span>01</span> Da ideia à entrega</p>
+        <h1>Menos caos.<br><em>Mais fluxo.</em></h1>
+        <p>A central de comando que transforma projetos, entregáveis e aprovações em uma operação que todo mundo entende.</p>
+      </div>
+
+      <div class="workflow-visual" aria-label="Exemplo de fluxo de trabalho">
+        <div class="workflow-orbit orbit-one"></div>
+        <div class="workflow-orbit orbit-two"></div>
+        <article class="floating-card floating-card-main">
+          <header>
+            <span class="card-brand">NOVA CAMPANHA</span>
+            <span class="live-pill"><i></i> Em produção</span>
+          </header>
+          <h2>Lançamento de marca</h2>
+          <p>7 de 10 etapas concluídas</p>
+          <div class="progress-track"><i></i></div>
+          <footer>
+            <div class="avatar-stack"><b>MC</b><b>BR</b><b>+3</b></div>
+            <span>Entrega em 4 dias <strong>→</strong></span>
+          </footer>
+        </article>
+        <article class="floating-card floating-card-step">
+          <span class="step-icon">✓</span>
+          <div><small>ETAPA CONCLUÍDA</small><strong>Copy aprovada</strong></div>
+        </article>
+        <article class="floating-card floating-card-alert">
+          <small>PRÓXIMO PASSO</small>
+          <strong>Design final</strong>
+          <span><i></i> Hoje, 16:00</span>
+        </article>
+        <div class="spark spark-one">✦</div>
+        <div class="spark spark-two">✦</div>
+      </div>
+
+      <div class="login-story-bottom">
+        <p>Projetos <span></span> Fluxos <span></span> Equipes <span></span> Clientes</p>
+        <small>Feito para agências que querem crescer sem perder o controle.</small>
+      </div>
+    </section>
+
+    <section class="login-panel">
+      <div class="login-panel-inner">
+        <div class="mobile-login-brand">
+          <img src="../assets/doti-logo.png" alt="Doti">
+          <span>OPERAÇÃO CRIATIVA</span>
+        </div>
+        <div class="login-heading">
+          <span class="login-number">/ 01</span>
+          <p class="login-kicker">SEU ESPAÇO DE TRABALHO</p>
+          <h2>Bem-vindo<br>de volta<span>.</span></h2>
+          <p>Entre para continuar de onde sua equipe parou.</p>
+        </div>
+
+        <form class="login-form" id="loginForm" novalidate>
+          <label class="login-field">
+            <span>E-mail profissional</span>
+            <div>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5 12 13l9-6.5M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/></svg>
+              <input id="loginEmail" type="email" autocomplete="email" placeholder="voce@suaagencia.com" required>
+            </div>
+            <small class="field-error">Digite um e-mail válido.</small>
+          </label>
+
+          <label class="login-field">
+            <span>Senha</span>
+            <div>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+              <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Sua senha" minlength="6" required>
+              <button class="password-toggle" id="passwordToggle" type="button" aria-label="Mostrar senha">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+              </button>
+            </div>
+            <small class="field-error">A senha precisa ter pelo menos 6 caracteres.</small>
+          </label>
+
+          <div class="login-options">
+            <label class="remember-check">
+              <input id="rememberLogin" type="checkbox">
+              <span></span> Manter conectado
+            </label>
+            <button class="forgot-link" type="button" id="forgotPassword">Esqueci minha senha</button>
+          </div>
+
+          <button class="login-submit" type="submit"><span>Entrar na Doti</span><b>→</b></button>
+          <button class="demo-access" type="button" id="demoAccess"><span>Explorar o ambiente de demonstração</span><b>↗</b></button>
+        </form>
+
+        <p class="login-support">Primeiro acesso? <button type="button" id="requestAccess">Solicite um convite ao administrador</button></p>
+      </div>
+      <footer class="login-footer"><span>© 2026 Doti</span><span>Privacidade &nbsp;·&nbsp; Segurança</span></footer>
+    </section>
+  </main>
+  <script src="login.js"></script>
+</body>
+</html>
