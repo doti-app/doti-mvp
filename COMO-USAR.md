@@ -249,17 +249,25 @@ Para restaurar, use **Importar backup** na Visão geral e selecione um arquivo g
 
 Recomenda-se exportar um backup regularmente, especialmente antes de limpar dados do navegador ou mudar de computador.
 
-## Persistência e limitações atuais
+## Autenticação e limitações atuais
 
-Esta versão funciona inteiramente no navegador:
+A identificação de usuários utiliza Supabase Auth:
 
-- possui uma interface de login demonstrativa, ainda sem autenticação real no servidor;
-- não envia dados para serviços externos;
+- login com e-mail e senha;
+- criação de conta e agência;
+- confirmação do endereço de e-mail;
+- recuperação e redefinição de senha;
+- sessão segura com renovação automática;
+- perfil vinculado à agência e papel de proprietário, administrador ou membro;
+- proteção do painel para visitantes sem sessão.
+
+O deploy precisa das variáveis `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY`. Execute `supabase-auth.sql` no SQL Editor do Supabase e configure `https://doti-mvp.vercel.app/dot-admin/` entre as URLs autorizadas do projeto.
+
+Os dados operacionais da aplicação ainda usam o armazenamento do navegador:
+
 - não sincroniza entre computadores;
 - não permite trabalho simultâneo de várias pessoas;
 - os dados podem ser perdidos se o armazenamento do site for apagado.
-
-Os arquivos `supabase-schema.sql` e `supabase-seed.sql` já descrevem uma estrutura de banco para uma futura versão multiusuário. A interface atual ainda não está conectada ao Supabase.
 
 ## Arquivos do projeto
 
@@ -270,10 +278,12 @@ Os arquivos `supabase-schema.sql` e `supabase-seed.sql` já descrevem uma estrut
 - `app.js`: regras, persistência, criação, edição, filtros, tarefas, fluxos e backups.
 - `dot-admin/index.html`: página independente de acesso à Doti.
 - `dot-admin/login.css`: identidade visual e responsividade da área de login.
-- `dot-admin/login.js`: validação e criação da sessão demonstrativa.
-- `dot-admin/auth-guard.js`: proteção temporária do painel e encerramento da sessão.
-- `supabase-schema.sql`: estrutura de banco preparada para projetos, entregáveis, etapas, tarefas e grupos.
-- `supabase-seed.sql`: modelos e grupos iniciais para o banco.
+- `dot-admin/login.js`: login, cadastro, confirmação e recuperação de senha.
+- `dot-admin/auth-guard.js`: proteção do painel, identificação do perfil e logout.
+- `dot-admin/supabase-client.js`: cliente compartilhado de autenticação.
+- `api/auth-config.js`: entrega segura da configuração pública no ambiente Vercel.
+- `supabase-auth.sql`: perfis, agências, papéis, políticas de segurança e automações.
+- `.env.example`: nomes das variáveis exigidas no deploy.
 
 ## Primeiro uso recomendado
 

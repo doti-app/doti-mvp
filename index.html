@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="auth-pending">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,7 +11,8 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="styles-extra.css">
   <link rel="stylesheet" href="functional.css">
-  <script src="dot-admin/auth-guard.js"></script>
+  <style>.auth-pending body{visibility:hidden}</style>
+  <script type="module" src="dot-admin/auth-guard.js?v=4"></script>
 </head>
 <body>
   <div class="app-shell" id="appShell">

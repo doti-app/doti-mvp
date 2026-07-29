@@ -67,13 +67,31 @@
         </div>
         <div class="login-heading">
           <span class="login-number">/ 01</span>
-          <p class="login-kicker">SEU ESPAÇO DE TRABALHO</p>
-          <h2>Bem-vindo<br>de volta<span>.</span></h2>
-          <p>Entre para continuar de onde sua equipe parou.</p>
+          <p class="login-kicker" id="loginKicker">SEU ESPAÇO DE TRABALHO</p>
+          <h2 id="loginTitle">Bem-vindo<br>de volta<span>.</span></h2>
+          <p id="loginDescription">Entre para continuar de onde sua equipe parou.</p>
         </div>
 
         <form class="login-form" id="loginForm" novalidate>
-          <label class="login-field">
+          <label class="login-field signup-only" hidden>
+            <span>Nome completo</span>
+            <div>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+              <input id="fullName" type="text" autocomplete="name" placeholder="Seu nome e sobrenome">
+            </div>
+            <small class="field-error">Informe seu nome completo.</small>
+          </label>
+
+          <label class="login-field signup-only" hidden>
+            <span>Nome da agência</span>
+            <div>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V7l8-4 8 4v14M8 10h2m4 0h2M8 14h2m4 0h2M8 18h8"/></svg>
+              <input id="agencyName" type="text" autocomplete="organization" placeholder="Nome da sua agência">
+            </div>
+            <small class="field-error">Informe o nome da agência.</small>
+          </label>
+
+          <label class="login-field email-field">
             <span>E-mail profissional</span>
             <div>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5 12 13l9-6.5M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/></svg>
@@ -82,7 +100,7 @@
             <small class="field-error">Digite um e-mail válido.</small>
           </label>
 
-          <label class="login-field">
+          <label class="login-field password-field">
             <span>Senha</span>
             <div>
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
@@ -94,23 +112,30 @@
             <small class="field-error">A senha precisa ter pelo menos 6 caracteres.</small>
           </label>
 
-          <div class="login-options">
-            <label class="remember-check">
-              <input id="rememberLogin" type="checkbox">
-              <span></span> Manter conectado
-            </label>
+          <label class="login-field confirm-only" hidden>
+            <span>Confirmar senha</span>
+            <div>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+              <input id="confirmPassword" type="password" autocomplete="new-password" placeholder="Repita sua senha">
+            </div>
+            <small class="field-error">As senhas precisam ser iguais.</small>
+          </label>
+
+          <div class="login-options login-only">
+            <span class="secure-session"><i>✓</i> Sessão protegida</span>
             <button class="forgot-link" type="button" id="forgotPassword">Esqueci minha senha</button>
           </div>
 
+          <p class="login-form-status" id="loginStatus" role="alert" aria-live="polite"></p>
           <button class="login-submit" type="submit"><span>Entrar na Doti</span><b>→</b></button>
-          <button class="demo-access" type="button" id="demoAccess"><span>Explorar o ambiente de demonstração</span><b>↗</b></button>
+          <button class="demo-access secondary-action" type="button" id="secondaryAction"><span>Criar minha conta</span><b>↗</b></button>
         </form>
 
-        <p class="login-support">Primeiro acesso? <button type="button" id="requestAccess">Solicite um convite ao administrador</button></p>
+        <p class="login-support" id="loginSupport">Ao continuar, você concorda com os termos de uso e privacidade da Doti.</p>
       </div>
       <footer class="login-footer"><span>© 2026 Doti</span><span>Privacidade &nbsp;·&nbsp; Segurança</span></footer>
     </section>
   </main>
-  <script src="login.js"></script>
+  <script type="module" src="login.js?v=4"></script>
 </body>
 </html>
