@@ -17,7 +17,7 @@ const kicker = document.getElementById('loginKicker');
 const description = document.getElementById('loginDescription');
 const query = new URLSearchParams(location.search);
 
-let mode = query.get('mode') === 'reset' ? 'reset' : 'login';
+let mode = ['reset', 'invite'].includes(query.get('mode')) ? query.get('mode') : 'login';
 let supabase;
 
 const modeContent = {
@@ -48,6 +48,13 @@ const modeContent = {
     description: 'Crie uma nova senha para continuar na Doti.',
     submit: 'Salvar nova senha',
     secondary: 'Voltar para o login'
+  },
+  invite: {
+    kicker: 'CONVITE ACEITO',
+    title: 'Crie sua<br>senha<span>.</span>',
+    description: 'Seu acesso à agência está quase pronto.',
+    submit: 'Ativar meu acesso',
+    secondary: 'Sair e voltar ao login'
   }
 };
 
@@ -80,18 +87,18 @@ function setMode(nextMode) {
     field.hidden = mode !== 'signup';
   });
   document.querySelectorAll('.confirm-only').forEach(field => {
-    field.hidden = !['signup', 'reset'].includes(mode);
+    field.hidden = !['signup', 'reset', 'invite'].includes(mode);
   });
   document.querySelectorAll('.login-only').forEach(field => {
     field.hidden = mode !== 'login';
   });
-  document.querySelector('.email-field').hidden = mode === 'reset';
+  document.querySelector('.email-field').hidden = ['reset', 'invite'].includes(mode);
   document.querySelector('.password-field').hidden = ['recovery'].includes(mode);
 
   passwordInput.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
   clearStatus();
   form.querySelectorAll('.invalid').forEach(field => field.classList.remove('invalid'));
-  const focusTarget = mode === 'reset' ? passwordInput : mode === 'signup' ? fullNameInput : emailInput;
+  const focusTarget = ['reset', 'invite'].includes(mode) ? passwordInput : mode === 'signup' ? fullNameInput : emailInput;
   setTimeout(() => focusTarget.focus(), 50);
 }
 
@@ -182,6 +189,20 @@ async function handleReset() {
   showStatus('Senha atualizada. Entre novamente com sua nova senha.', 'success');
 }
 
+async function handleInvite() {
+  if (!validatePassword(true)) return;
+  const { error } = await supabase.auth.updateUser({ password: passwordInput.value });
+  if (error) throw error;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    await fetch('/api/accept-invite', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}` }
+    }).catch(() => {});
+  }
+  location.replace('../index.html');
+}
+
 form.addEventListener('submit', async event => {
   event.preventDefault();
   clearStatus();
@@ -191,6 +212,7 @@ form.addEventListener('submit', async event => {
     if (mode === 'signup') await handleSignup();
     if (mode === 'recovery') await handleRecovery();
     if (mode === 'reset') await handleReset();
+    if (mode === 'invite') await handleInvite();
   } catch (error) {
     showStatus(translateAuthError(error));
   } finally {
@@ -198,7 +220,10 @@ form.addEventListener('submit', async event => {
   }
 });
 
-secondaryAction.addEventListener('click', () => {
+secondaryAction.addEventListener('click', async () => {
+  if (mode === 'invite') {
+    await supabase?.auth.signOut();
+  }
   setMode(mode === 'login' ? 'signup' : 'login');
 });
 
@@ -224,15 +249,22 @@ async function initialize() {
   try {
     supabase = await getSupabase();
     const { data: { session } } = await supabase.auth.getSession();
-    if (session && mode !== 'reset') {
+    if (session && !['reset', 'invite'].includes(mode)) {
       location.replace('../index.html');
       return;
+    }
+    if (mode === 'invite' && !session) {
+      setMode('login');
+      showStatus('Este convite é inválido ou expirou. Peça um novo convite ao administrador.', 'info');
     }
     if (query.get('confirmed') === '1') {
       showStatus('E-mail confirmado. Sua conta está pronta para entrar.', 'success');
     }
     if (query.get('reason') === 'expired') {
       showStatus('Sua sessão expirou. Entre novamente para continuar.', 'info');
+    }
+    if (query.get('error') === 'disabled') {
+      showStatus('Seu acesso foi desativado. Fale com o administrador da agência.', 'info');
     }
   } catch (error) {
     showStatus(error.message, 'info');

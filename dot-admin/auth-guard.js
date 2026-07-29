@@ -6,19 +6,31 @@ async function protectPanel() {
     const { data: { session }, error } = await supabase.auth.getSession();
     if (error) throw error;
     if (!session) {
-      location.replace('dot-admin/?reason=expired');
+      location.replace('/dot-admin/?reason=expired');
       return;
     }
 
     const user = session.user;
     const { data: profile } = await supabase
       .from('profiles')
-      .select('full_name, agency_name, role')
+      .select('id, agency_id, email, full_name, agency_name, role, is_active')
       .eq('id', user.id)
       .maybeSingle();
 
+    if (!profile || profile.is_active === false) {
+      await supabase.auth.signOut();
+      location.replace('/dot-admin/?error=disabled');
+      return;
+    }
+
     const fullName = profile?.full_name || user.user_metadata?.full_name || user.email.split('@')[0];
     const agencyName = profile?.agency_name || user.user_metadata?.agency_name || 'Sua agência';
+    const roleLabels = {
+      owner: 'proprietário',
+      admin: 'administrador',
+      member: 'membro',
+      viewer: 'visualizador'
+    };
     const initials = fullName
       .split(/\s+/)
       .filter(Boolean)
@@ -30,22 +42,28 @@ async function protectPanel() {
     const profileElement = document.querySelector('.profile');
     if (profileElement) {
       profileElement.querySelector('strong').textContent = fullName;
-      profileElement.querySelector('small').textContent = `${agencyName} · ${profile?.role || 'membro'}`;
+      profileElement.querySelector('small').textContent = `${agencyName} · ${roleLabels[profile?.role] || 'membro'}`;
       profileElement.querySelector('.avatar').textContent = initials;
       profileElement.title = user.email;
     }
 
+    document.body.dataset.userRole = profile.role;
+    window.dotiAuthContext = { supabase, session, user, profile };
+
     document.getElementById('logoutButton')?.addEventListener('click', async () => {
       await supabase.auth.signOut();
-      location.replace('dot-admin/');
+      location.replace('/dot-admin/');
     });
 
     supabase.auth.onAuthStateChange(event => {
-      if (event === 'SIGNED_OUT') location.replace('dot-admin/');
+      if (event === 'SIGNED_OUT') location.replace('/dot-admin/');
     });
     document.documentElement.classList.remove('auth-pending');
+    window.dispatchEvent(new CustomEvent('doti:auth-ready', {
+      detail: window.dotiAuthContext
+    }));
   } catch (_) {
-    location.replace('dot-admin/?error=config');
+    location.replace('/dot-admin/?error=config');
   }
 }
 

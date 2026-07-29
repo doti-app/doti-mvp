@@ -294,3 +294,25 @@ Os dados operacionais da aplicação ainda usam o armazenamento do navegador:
 5. Adicione tarefas à etapa atual de cada entregável.
 6. Avance as etapas conforme o trabalho for concluído.
 7. Exporte um backup ao final da configuração.
+# Administração da equipe
+
+O primeiro cadastro da agência recebe o nível **Proprietário**. Para liberar
+acessos individuais, execute novamente o arquivo `supabase-auth.sql` no SQL
+Editor do Supabase e configure no Vercel:
+
+- `SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SECRET_KEY`
+
+A chave secreta deve existir apenas nas variáveis de ambiente do Vercel. Nunca
+adicione essa chave ao navegador, ao GitHub ou ao arquivo `api/auth-config.js`.
+
+Depois, entre como proprietário e abra **Equipe**:
+
+- Proprietário: controle total e administração de todos os níveis.
+- Administrador: gerencia operação, membros e visualizadores.
+- Membro: cria e atualiza o trabalho.
+- Visualizador: acompanha sem alterar.
+
+Ao convidar, o Supabase envia um e-mail. A pessoa abre o link, cria a própria
+senha e passa a acessar a mesma agência.

@@ -10,9 +10,9 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="styles-extra.css">
-  <link rel="stylesheet" href="functional.css">
+  <link rel="stylesheet" href="/functional.css?v=2">
   <style>.auth-pending body{visibility:hidden}</style>
-  <script type="module" src="dot-admin/auth-guard.js?v=4"></script>
+  <script type="module" src="/dot-admin/auth-guard.js?v=5"></script>
 </head>
 <body>
   <div class="app-shell" id="appShell">
@@ -31,6 +31,7 @@
         <button class="nav-item" data-page="demandas" data-label="Demandas" title="Demandas"><span class="nav-icon">□</span><span class="nav-label">Demandas</span><b id="demandNavCount">0</b></button>
         <button class="nav-item" data-page="fluxos" data-label="Fluxos" title="Fluxos"><span class="nav-icon">↝</span><span class="nav-label">Fluxos</span><b id="workflowNavCount">0</b></button>
         <button class="nav-item" data-page="clientes" data-label="Clientes" title="Clientes"><span class="nav-icon">◇</span><span class="nav-label">Clientes</span><b id="clientNavCount">0</b></button>
+        <button class="nav-item" data-page="equipe" data-label="Equipe e acessos" title="Equipe e acessos" id="teamNavItem"><span class="nav-icon">◎</span><span class="nav-label">Equipe</span><b id="teamNavCount">0</b></button>
       </nav>
       <div class="sidebar-bottom">
         <div class="storage-note"><i></i><span>Dados salvos neste navegador</span></div>
@@ -137,6 +138,45 @@
         </div>
         <section class="client-workspace" id="clientWorkspace" hidden></section>
       </div>
+
+      <div class="page team-page" id="equipe">
+        <section class="page-title team-page-title">
+          <div>
+            <p class="eyebrow">ADMINISTRAÇÃO</p>
+            <h1>Equipe e acessos</h1>
+            <p>Convide pessoas, defina responsabilidades e mantenha a operação protegida.</p>
+          </div>
+          <button class="primary-btn" id="inviteMemberButton">+ Convidar pessoa</button>
+        </section>
+
+        <section class="team-overview" aria-label="Resumo da equipe">
+          <article><span>MEMBROS</span><strong id="teamMemberMetric">—</strong><small>pessoas vinculadas</small></article>
+          <article><span>ACESSOS ATIVOS</span><strong id="teamActiveMetric">—</strong><small>podem entrar agora</small></article>
+          <article><span>CONVITES</span><strong id="teamInviteMetric">—</strong><small>aguardando aceite</small></article>
+          <article class="team-security-card"><span>SEGURANÇA</span><strong>Protegido</strong><small>permissões por função</small></article>
+        </section>
+
+        <section class="team-layout">
+          <article class="panel team-directory-panel">
+            <div class="panel-head">
+              <div><h2>Pessoas da agência</h2><p>Cada pessoa usa seu próprio e-mail e senha.</p></div>
+              <label class="mini-search team-search">⌕ <input id="teamSearch" placeholder="Buscar pessoa"></label>
+            </div>
+            <div class="team-table" id="teamMembers" aria-live="polite">
+              <div class="team-loading">Carregando equipe…</div>
+            </div>
+          </article>
+
+          <aside class="team-access-guide">
+            <p class="eyebrow">NÍVEIS DE ACESSO</p>
+            <h2>Controle sem complicar.</h2>
+            <div class="access-level owner"><i>01</i><div><strong>Proprietário</strong><p>Controle total, equipe e configurações críticas.</p></div></div>
+            <div class="access-level admin"><i>02</i><div><strong>Administrador</strong><p>Gerencia operação e membros, exceto proprietários.</p></div></div>
+            <div class="access-level member"><i>03</i><div><strong>Membro</strong><p>Cria e atualiza projetos, etapas e clientes.</p></div></div>
+            <div class="access-level viewer"><i>04</i><div><strong>Visualizador</strong><p>Acompanha a operação sem fazer alterações.</p></div></div>
+          </aside>
+        </section>
+      </div>
     </main>
   </div>
 
@@ -144,5 +184,6 @@
     <span>✓</span><div><strong></strong><p></p></div>
   </div>
   <script src="app.js"></script>
+  <script type="module" src="/dot-admin/team-admin.js?v=1"></script>
 </body>
 </html>
