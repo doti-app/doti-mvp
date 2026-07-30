@@ -271,7 +271,7 @@ create table if not exists public.files (
   storage_path text not null,
   name text not null,
   mime_type text not null default 'application/octet-stream',
-  size_bytes bigint not null default 0 check (size_bytes between 0 and 104857600),
+  size_bytes bigint not null default 0 check (size_bytes between 0 and 52428800),
   step_position integer,
   step_name text,
   position integer not null default 0 check (position >= 0),
@@ -1093,7 +1093,7 @@ values (
   'doti-files',
   'doti-files',
   false,
-  104857600,
+  52428800,
   array['image/*', 'application/pdf', 'video/*']
 )
 on conflict (id) do update set

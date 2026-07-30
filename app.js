@@ -22,7 +22,7 @@ const navItems = [...document.querySelectorAll('.nav-item[data-page]')];
 const toast = document.getElementById('toast');
 const ATTACHMENT_DB_NAME = 'doti-attachments-v1';
 const ATTACHMENT_STORE_NAME = 'files';
-const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024;
+const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024;
 let attachmentDbPromise;
 
 const COLORS = ['site', 'video', 'social', 'branding', 'copy'];
@@ -535,7 +535,7 @@ function renderClientWorkspace(client) {
     if (!file) return;
     const isImage = file.type.startsWith('image/');
     const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
-    if ((!isImage && !isPdf) || file.size > MAX_ATTACHMENT_SIZE) return notify('Arquivo não permitido', 'Use uma imagem ou PDF de até 100 MB.', '!');
+    if ((!isImage && !isPdf) || file.size > MAX_ATTACHMENT_SIZE) return notify('Arquivo não permitido', 'Use uma imagem ou PDF de até 50 MB.', '!');
     const fileId = uid('client-file');
     try {
       await storeAttachmentFile(fileId, file);
@@ -982,7 +982,7 @@ function renderDeliverableAttachments(deliverable) {
       <button type="button" data-download-attachment="${attachment.id}" aria-label="Baixar ${escapeAttr(attachment.name)}" title="Baixar anexo">↓</button>
       <button type="button" data-delete-attachment="${attachment.id}" aria-label="Remover ${escapeAttr(attachment.name)}" title="Remover anexo">×</button>
     </article>`).join('')}</div>` : '<p class="attachment-empty">Nenhum arquivo anexado até o momento.</p>'}
-    <label class="attachment-upload"><input type="file" accept="image/*,application/pdf,video/*,.pdf" multiple><span>＋</span><div><strong>Anexar arquivos</strong><small>Imagens, PDF ou vídeos · até 100 MB por arquivo</small></div></label>
+    <label class="attachment-upload"><input type="file" accept="image/*,application/pdf,video/*,.pdf" multiple><span>＋</span><div><strong>Anexar arquivos</strong><small>Imagens, PDF ou vídeos · até 50 MB por arquivo</small></div></label>
   </section>`;
 }
 
@@ -1264,7 +1264,7 @@ function openDeliverable(id) {
           continue;
         }
         if (file.size > MAX_ATTACHMENT_SIZE) {
-          notify('Arquivo muito grande', `${file.name} ultrapassa o limite de 100 MB.`, '!');
+          notify('Arquivo muito grande', `${file.name} ultrapassa o limite de 50 MB.`, '!');
           continue;
         }
         try {
