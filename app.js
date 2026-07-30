@@ -2133,7 +2133,7 @@ function applyOperationRole(profile) {
 
 async function initializeOperation() {
   try {
-    const { profile } = await waitForOperationContext();
+    const { profile, localMode } = await waitForOperationContext();
     applyOperationRole(profile);
     const loaded = await loadAgencyState();
     operationRevision = Number(loaded.revision || 0);
@@ -2154,8 +2154,10 @@ async function initializeOperation() {
 
     applyLoadedState(await loadAgencyState());
     operationReady = true;
-    bindRealtime(profile.agency_id);
-    document.querySelector('.storage-note span').textContent = 'Dados protegidos e compartilhados';
+    if (!localMode) bindRealtime(profile.agency_id);
+    document.querySelector('.storage-note span').textContent = localMode
+      ? 'Dados salvos neste navegador'
+      : 'Dados protegidos e compartilhados';
   } catch (error) {
     console.error('Doti operation bootstrap failed', error);
     document.documentElement.classList.add('operation-error');

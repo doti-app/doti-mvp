@@ -10,9 +10,10 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="styles-extra.css">
-  <link rel="stylesheet" href="/functional.css?v=3">
+  <link rel="stylesheet" href="/functional.css?v=18">
   <style>.auth-pending body{visibility:hidden}</style>
-  <script type="module" src="/dot-admin/auth-guard.js?v=7"></script>
+  <script src="/assets/vendor/supabase-2.57.4.js"></script>
+  <script type="module" src="/dot-admin/auth-guard.js?v=9"></script>
 </head>
 <body>
   <div class="app-shell" id="appShell">
@@ -32,6 +33,7 @@
         <button class="nav-item" data-page="fluxos" data-label="Fluxos" title="Fluxos"><span class="nav-icon">↝</span><span class="nav-label">Fluxos</span><b id="workflowNavCount">0</b></button>
         <button class="nav-item" data-page="clientes" data-label="Clientes" title="Clientes"><span class="nav-icon">◇</span><span class="nav-label">Clientes</span><b id="clientNavCount">0</b></button>
         <button class="nav-item" data-page="equipe" data-label="Equipe e acessos" title="Equipe e acessos" id="teamNavItem"><span class="nav-icon">◎</span><span class="nav-label">Equipe</span><b id="teamNavCount">0</b></button>
+        <button class="nav-item" data-page="meus-dados" data-label="Meus dados" title="Meus dados"><span class="nav-icon">◉</span><span class="nav-label">Meus dados</span></button>
       </nav>
       <div class="sidebar-bottom">
         <div class="storage-note"><i></i><span>Dados salvos neste navegador</span></div>
@@ -153,7 +155,6 @@
           <article><span>MEMBROS</span><strong id="teamMemberMetric">—</strong><small>pessoas vinculadas</small></article>
           <article><span>ACESSOS ATIVOS</span><strong id="teamActiveMetric">—</strong><small>podem entrar agora</small></article>
           <article><span>CONVITES</span><strong id="teamInviteMetric">—</strong><small>aguardando aceite</small></article>
-          <article class="team-security-card"><span>SEGURANÇA</span><strong>Protegido</strong><small>permissões por função</small></article>
         </section>
 
         <section class="team-layout">
@@ -169,13 +170,60 @@
 
           <aside class="team-access-guide">
             <p class="eyebrow">NÍVEIS DE ACESSO</p>
-            <h2>Controle sem complicar.</h2>
             <div class="access-level owner"><i>01</i><div><strong>Proprietário</strong><p>Controle total, equipe e configurações críticas.</p></div></div>
             <div class="access-level admin"><i>02</i><div><strong>Administrador</strong><p>Gerencia operação e membros, exceto proprietários.</p></div></div>
             <div class="access-level member"><i>03</i><div><strong>Membro</strong><p>Cria e atualiza projetos, etapas e clientes.</p></div></div>
             <div class="access-level viewer"><i>04</i><div><strong>Visualizador</strong><p>Acompanha a operação sem fazer alterações.</p></div></div>
           </aside>
         </section>
+      </div>
+      <div class="page profile-settings-page" id="meus-dados">
+        <section class="page-title">
+          <div>
+            <p class="eyebrow">CONTA</p>
+            <h1>Meus dados</h1>
+            <p>Atualize seu nome e escolha como você aparece para a equipe.</p>
+          </div>
+        </section>
+
+        <form class="panel profile-settings-card" id="profileSettingsForm">
+          <div class="profile-settings-intro">
+            <div class="profile-avatar-preview" id="profileAvatarPreview" aria-hidden="true">DL</div>
+            <div>
+              <h2>Seu perfil</h2>
+              <p>O avatar escolhido aparecerá no seu perfil e, futuramente, nas atividades da operação.</p>
+            </div>
+          </div>
+
+          <div class="profile-fields">
+            <label>
+              <span>Nome completo</span>
+              <input id="profileFullName" name="fullName" type="text" minlength="2" maxlength="120" autocomplete="name" required>
+            </label>
+            <label>
+              <span>E-mail profissional</span>
+              <input id="profileEmail" name="email" type="email" readonly>
+              <small>O e-mail de acesso não pode ser alterado aqui.</small>
+            </label>
+            <label>
+              <span>Nível de acesso</span>
+              <input id="profileRole" name="role" type="text" readonly>
+              <small>Somente o proprietário ou administrador pode alterar esse nível.</small>
+            </label>
+          </div>
+
+          <fieldset class="profile-avatar-fieldset">
+            <legend>Escolha seu avatar</legend>
+            <p>Selecione uma das opções abaixo.</p>
+            <div class="profile-avatar-picker" id="profileAvatarPicker"></div>
+          </fieldset>
+
+          <div class="profile-save-status" id="profileSaveStatus" role="status" aria-live="polite"></div>
+          <footer class="profile-settings-footer">
+            <span id="profileStorageHint">No modo local, as alterações ficam somente neste navegador.</span>
+            <button class="primary-btn" type="submit">Salvar alterações</button>
+          </footer>
+        </form>
       </div>
     </main>
   </div>
@@ -184,6 +232,7 @@
     <span>✓</span><div><strong></strong><p></p></div>
   </div>
   <script type="module" src="/app.js?v=13"></script>
-  <script type="module" src="/dot-admin/team-admin.js?v=1"></script>
+  <script type="module" src="/dot-admin/team-admin.js?v=8"></script>
+  <script type="module" src="/dot-admin/profile-admin.js?v=2"></script>
 </body>
 </html>

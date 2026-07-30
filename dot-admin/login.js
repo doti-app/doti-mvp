@@ -1,4 +1,4 @@
-import { authUrl, getSupabase } from './supabase-client.js';
+import { authUrl, getAuthConfig, getSupabase } from './supabase-client.js';
 
 const form = document.getElementById('loginForm');
 const emailInput = document.getElementById('loginEmail');
@@ -244,6 +244,11 @@ async function initialize() {
   setMode(mode);
   setBusy(true);
   try {
+    const config = await getAuthConfig();
+    if (config.localMode) {
+      location.replace('../index.html');
+      return;
+    }
     supabase = await getSupabase();
     const { data: { session } } = await supabase.auth.getSession();
     if (session && !['reset', 'invite'].includes(mode)) {

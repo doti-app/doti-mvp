@@ -1,0 +1,11 @@
+{
+  "name": "doti-mvp",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node local-server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.57.4"
+  }
+}

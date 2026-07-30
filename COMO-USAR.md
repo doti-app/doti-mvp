@@ -4,6 +4,32 @@ Este MVP é uma ferramenta interna para organizar a operação de uma agência d
 
 Os dados são salvos no `localStorage` do navegador. Isso permite utilizar a plataforma sem servidor, mas significa que os dados pertencem ao navegador e ao perfil em que foram cadastrados.
 
+## Desenvolvimento local
+
+Para modificar e testar a Doti no computador:
+
+1. Instale a versão LTS do Node.js.
+2. Dê dois cliques em `iniciar-doti-local.cmd`.
+3. Abra `http://localhost:3000` no navegador.
+4. Mantenha a janela do servidor aberta enquanto estiver testando.
+
+Depois de alterar e salvar um arquivo, atualize a página com `Ctrl + F5`.
+Para encerrar o servidor, pressione `Ctrl + C` na janela aberta.
+
+O arquivo `.env.local` contém as variáveis usadas apenas no computador e não deve ser enviado ao GitHub. O ambiente local pode apontar para o mesmo Supabase da produção; nesse caso, alterações de dados feitas durante os testes também afetam os dados reais.
+
+### Modo local seguro
+
+Com `DOTI_LOCAL_MODE=true` no `.env.local`, o servidor:
+
+- libera a interface sem exigir login;
+- salva projetos, clientes, demandas, fluxos e equipe somente no `localStorage`;
+- simula convites e alterações de acesso sem enviar e-mails;
+- bloqueia as APIs remotas de equipe e convites;
+- não envia dados ao Supabase.
+
+Um aviso verde no canto inferior direito confirma que o modo seguro está ativo.
+
 ## Estrutura operacional
 
 A plataforma usa quatro níveis:

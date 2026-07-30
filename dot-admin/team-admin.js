@@ -14,6 +14,7 @@ const roleDescriptions = {
 
 let authContext;
 let teamState = { members: [], invitations: [], currentUserId: '', currentRole: '' };
+const LOCAL_TEAM_KEY = 'doti-local-team-v1';
 
 const teamNavItem = document.getElementById('teamNavItem');
 const inviteButton = document.getElementById('inviteMemberButton');
@@ -39,6 +40,27 @@ function initials(name) {
     .toUpperCase();
 }
 
+function localOwnerProfile() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('doti-local-profile-v1') || 'null');
+    if (saved && typeof saved === 'object') {
+      return {
+        full_name: String(saved.full_name || 'Ambiente local'),
+        avatar_url: String(saved.avatar_url || '')
+      };
+    }
+  } catch (_) {}
+  return { full_name: 'Ambiente local', avatar_url: '' };
+}
+
+function memberAvatar(member) {
+  const avatarUrl = String(member.avatar_url || '');
+  if (/^\/assets\/avatars-users\/avatar-\d{2}\.png$/.test(avatarUrl)) {
+    return `<img src="${escapeHtml(avatarUrl)}" alt="" loading="lazy">`;
+  }
+  return escapeHtml(initials(member.full_name));
+}
+
 function showTeamNotice(title, message, attention = false) {
   const toast = document.getElementById('toast');
   if (!toast) return;
@@ -51,7 +73,120 @@ function showTeamNotice(title, message, attention = false) {
   showTeamNotice.timer = setTimeout(() => toast.classList.remove('show'), 3600);
 }
 
+function defaultLocalTeam() {
+  const localOwner = localOwnerProfile();
+  return {
+    members: [
+      {
+        id: 'local-owner',
+        email: 'local@doti.dev',
+        full_name: localOwner.full_name,
+        avatar_url: localOwner.avatar_url,
+        role: 'owner',
+        is_active: true,
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 'local-member-design',
+        email: 'design@doti.dev',
+        full_name: 'Pessoa de Design',
+        role: 'member',
+        is_active: true,
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 'local-member-viewer',
+        email: 'cliente@doti.dev',
+        full_name: 'Cliente de Teste',
+        role: 'viewer',
+        is_active: true,
+        created_at: new Date().toISOString()
+      }
+    ],
+    invitations: [],
+    currentUserId: 'local-owner',
+    currentRole: 'owner'
+  };
+}
+
+function readLocalTeam() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LOCAL_TEAM_KEY) || 'null');
+    if (saved?.members && saved?.invitations) return saved;
+  } catch (_) {}
+  const initial = defaultLocalTeam();
+  localStorage.setItem(LOCAL_TEAM_KEY, JSON.stringify(initial));
+  return initial;
+}
+
+function saveLocalTeam(state) {
+  localStorage.setItem(LOCAL_TEAM_KEY, JSON.stringify(state));
+  return JSON.parse(JSON.stringify(state));
+}
+
+function localTeamRequest(action, body = {}) {
+  const state = readLocalTeam();
+  if (action === 'list') return JSON.parse(JSON.stringify(state));
+
+  if (action === 'invite') {
+    const email = String(body?.email || '').trim().toLowerCase();
+    if (state.members.some(member => member.email.toLowerCase() === email)) {
+      throw new Error('Este e-mail ja faz parte da equipe local.');
+    }
+    const id = `local-member-${Date.now()}`;
+    state.members.push({
+      id,
+      email,
+      full_name: String(body?.fullName || 'Pessoa de teste').trim(),
+      role: body?.role || 'member',
+      is_active: true,
+      created_at: new Date().toISOString()
+    });
+    state.invitations.push({
+      id: `local-invite-${Date.now()}`,
+      email,
+      full_name: String(body?.fullName || 'Pessoa de teste').trim(),
+      role: body?.role || 'member',
+      status: 'pending',
+      created_at: new Date().toISOString()
+    });
+    saveLocalTeam(state);
+    return { message: `Convite simulado para ${email}. Nenhum e-mail foi enviado.` };
+  }
+
+  if (action === 'update_member') {
+    const member = state.members.find(item => item.id === body?.memberId);
+    if (!member) throw new Error('Membro local nao encontrado.');
+    if (body.role != null && !member.is_active) {
+      throw new Error('Reative a pessoa antes de alterar o nivel de acesso.');
+    }
+    if (body.role != null) member.role = body.role;
+    if (body.isActive != null) member.is_active = Boolean(body.isActive);
+    saveLocalTeam(state);
+    return { message: 'Alteracao salva somente neste navegador.' };
+  }
+
+  if (action === 'remove_member') {
+    const member = state.members.find(item => item.id === body?.memberId);
+    if (!member) throw new Error('Membro local nao encontrado.');
+    if (member.id === state.currentUserId || member.role === 'owner') {
+      throw new Error('O proprietario e o usuario atual nao podem ser removidos.');
+    }
+    state.members = state.members.filter(item => item.id !== member.id);
+    state.invitations = state.invitations.filter(
+      invitation => invitation.email.toLowerCase() !== member.email.toLowerCase()
+    );
+    saveLocalTeam(state);
+    return { message: `${member.full_name} foi removido somente da equipe local.` };
+  }
+
+  throw new Error('Operacao local nao suportada.');
+}
+
 async function teamRequest(action = 'list', body = {}) {
+  if (authContext?.localMode) {
+    return localTeamRequest(action, body);
+  }
   const { data, error } = await authContext.supabase.functions.invoke('team-admin', {
     body: { action, ...body }
   });
@@ -118,7 +253,7 @@ function renderMembers() {
       (teamState.currentRole !== 'owner' && member.role === 'admin');
     return `
       <article class="team-member ${member.is_active ? '' : 'disabled'}" data-member-id="${escapeHtml(member.id)}">
-        <div class="team-avatar">${escapeHtml(initials(member.full_name))}</div>
+        <div class="team-avatar">${memberAvatar(member)}</div>
         <div class="team-person">
           <div><strong>${escapeHtml(member.full_name)}</strong>${isCurrent ? '<span>VOCÊ</span>' : ''}</div>
           <p>${escapeHtml(member.email)}</p>
@@ -129,16 +264,23 @@ function renderMembers() {
         </div>
         <label class="team-role-select">
           <span>Nível</span>
-          <select data-member-role ${protectedMember ? 'disabled' : ''}>${roleOptions(member)}</select>
+          <select data-member-role ${protectedMember || !member.is_active ? 'disabled' : ''}>${roleOptions(member)}</select>
         </label>
         <div class="team-member-status ${member.is_active && !invitePending ? 'active' : 'inactive'}">
           <i></i>${invitePending ? 'Convidado' : member.is_active ? 'Ativo' : 'Desativado'}
         </div>
-        <button class="team-access-toggle" type="button" data-toggle-access
-          ${protectedMember ? 'disabled' : ''}
-          aria-label="${member.is_active ? 'Desativar' : 'Reativar'} acesso de ${escapeHtml(member.full_name)}">
-          ${member.is_active ? 'Desativar' : 'Reativar'}
-        </button>
+        <div class="team-actions">
+          <button class="team-access-toggle" type="button" data-toggle-access
+            ${protectedMember ? 'disabled' : ''}
+            aria-label="${member.is_active ? 'Desativar' : 'Reativar'} acesso de ${escapeHtml(member.full_name)}">
+            ${member.is_active ? 'Desativar' : 'Reativar'}
+          </button>
+          ${authContext?.localMode && !protectedMember && !member.is_active ? `
+            <button class="team-remove-member" type="button" data-remove-member
+              aria-label="Remover ${escapeHtml(member.full_name)} da equipe">
+              Remover
+            </button>` : ''}
+        </div>
       </article>`;
   }).join('');
 }
@@ -164,6 +306,54 @@ function closeModal(modal) {
   modal?.remove();
 }
 
+function openRemoveMemberModal(member) {
+  const modal = document.createElement('div');
+  modal.className = 'doti-modal team-remove-modal';
+  modal.innerHTML = `
+    <form>
+      <header>
+        <div><p class="eyebrow">REMOVER ACESSO</p><h2>Remover da equipe?</h2></div>
+        <button type="button" data-close-modal aria-label="Fechar">&times;</button>
+      </header>
+      <div class="modal-body">
+        <div class="team-remove-person">
+          <span>${escapeHtml(initials(member.full_name))}</span>
+          <div><strong>${escapeHtml(member.full_name)}</strong><small>${escapeHtml(member.email)}</small></div>
+        </div>
+        <p class="team-remove-warning">
+          Esta pessoa sera removida da equipe simulada. O historico de projetos permanece e nenhum dado sera enviado ao banco.
+        </p>
+      </div>
+      <footer>
+        <button type="button" class="cancel" data-close-modal>Cancelar</button>
+        <button type="submit" class="team-remove-confirm">Remover da equipe</button>
+      </footer>
+    </form>`;
+  document.body.appendChild(modal);
+
+  modal.querySelectorAll('[data-close-modal]').forEach(button => {
+    button.addEventListener('click', () => closeModal(modal));
+  });
+  modal.addEventListener('click', event => {
+    if (event.target === modal) closeModal(modal);
+  });
+  modal.querySelector('form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const submit = event.currentTarget.querySelector('[type="submit"]');
+    submit.disabled = true;
+    submit.textContent = 'Removendo...';
+    try {
+      const result = await teamRequest('remove_member', { memberId: member.id });
+      closeModal(modal);
+      showTeamNotice('Pessoa removida', result.message);
+      await loadTeam();
+    } catch (error) {
+      closeModal(modal);
+      showTeamNotice('Remocao nao realizada', error.message, true);
+    }
+  });
+}
+
 function openInviteModal() {
   const canInviteAdmin = teamState.currentRole === 'owner';
   const modal = document.createElement('div');
@@ -172,7 +362,7 @@ function openInviteModal() {
     <form id="teamInviteForm">
       <header>
         <div><p class="eyebrow">NOVO ACESSO</p><h2>Convidar para a equipe</h2></div>
-        <button type="button" data-close-modal aria-label="Fechar">×</button>
+        <button type="button" data-close-modal aria-label="Fechar">&times;</button>
       </header>
       <div class="modal-body">
         <p class="team-invite-intro">A pessoa receberá um e-mail seguro para criar a própria senha e entrar no espaço da agência.</p>
@@ -237,6 +427,12 @@ membersContainer.addEventListener('change', async event => {
   const select = event.target.closest('[data-member-role]');
   if (!select) return;
   const row = select.closest('[data-member-id]');
+  const member = teamState.members.find(item => item.id === row.dataset.memberId);
+  if (!member?.is_active) {
+    showTeamNotice('Alteração não realizada', 'Reative a pessoa antes de alterar o nível de acesso.', true);
+    await loadTeam();
+    return;
+  }
   select.disabled = true;
   try {
     const result = await teamRequest('update_member', {
@@ -252,6 +448,14 @@ membersContainer.addEventListener('change', async event => {
 });
 
 membersContainer.addEventListener('click', async event => {
+  const removeButton = event.target.closest('[data-remove-member]');
+  if (removeButton) {
+    const row = removeButton.closest('[data-member-id]');
+    const member = teamState.members.find(item => item.id === row.dataset.memberId);
+    if (member) openRemoveMemberModal(member);
+    return;
+  }
+
   const button = event.target.closest('[data-toggle-access]');
   if (!button) return;
   const row = button.closest('[data-member-id]');
@@ -306,6 +510,10 @@ function applyRole(profile) {
 window.addEventListener('doti:auth-ready', event => {
   authContext = event.detail;
   applyRole(event.detail.profile);
+  if (location.hash === '#equipe') loadTeam();
+});
+
+window.addEventListener('doti:profile-updated', () => {
   if (location.hash === '#equipe') loadTeam();
 });
 

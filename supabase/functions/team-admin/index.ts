@@ -28,6 +28,7 @@ type Profile = {
   agency_name: string;
   role: 'owner' | 'admin' | 'member' | 'viewer';
   is_active: boolean;
+  avatar_url: string | null;
 };
 
 class HttpError extends Error {
@@ -112,7 +113,7 @@ async function authenticatedUser(request: Request) {
 
 async function profileForUser(userId: string): Promise<Profile> {
   const profiles = await adminRequest(
-    `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,agency_id,email,full_name,agency_name,role,is_active&limit=1`
+    `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,agency_id,email,full_name,agency_name,role,is_active,avatar_url&limit=1`
   );
   const profile = profiles?.[0];
   if (!profile?.is_active) {
@@ -130,11 +131,42 @@ async function managerContext(request: Request) {
   return { user, profile };
 }
 
+async function updateProfile(request: Request, body: Record<string, unknown>) {
+  const user = await authenticatedUser(request);
+  const profile = await profileForUser(user.id);
+  const fullName = String(body.fullName || '').trim();
+  const avatarUrl = String(body.avatarUrl || '').trim();
+
+  if (fullName.length < 2 || fullName.length > 120) {
+    throw new HttpError(400, 'Informe um nome com 2 a 120 caracteres.');
+  }
+  if (!/^\/assets\/avatars-users\/avatar-(0[1-9]|[12][0-9]|30)\.png$/.test(avatarUrl)) {
+    throw new HttpError(400, 'Escolha um avatar válido.');
+  }
+
+  await adminRequest(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      full_name: fullName,
+      avatar_url: avatarUrl
+    })
+  });
+
+  return {
+    profile: {
+      ...profile,
+      full_name: fullName,
+      avatar_url: avatarUrl
+    }
+  };
+}
+
 async function listTeam(profile: Profile) {
   const agencyId = encodeURIComponent(profile.agency_id);
   const [members, invitations] = await Promise.all([
     adminRequest(
-      `/rest/v1/profiles?agency_id=eq.${agencyId}&select=id,email,full_name,role,is_active,created_at&order=created_at.asc`
+      `/rest/v1/profiles?agency_id=eq.${agencyId}&select=id,email,full_name,avatar_url,role,is_active,created_at&order=created_at.asc`
     ),
     adminRequest(
       `/rest/v1/team_invitations?agency_id=eq.${agencyId}&status=eq.pending&select=id,email,full_name,role,status,expires_at,created_at&order=created_at.desc`
@@ -352,6 +384,9 @@ Deno.serve(async request => {
     const action = String(body.action || '');
     if (action === 'accept_invite') {
       return json(request, 200, await acceptInvitation(request));
+    }
+    if (action === 'update_profile') {
+      return json(request, 200, await updateProfile(request, body));
     }
 
     const { profile } = await managerContext(request);

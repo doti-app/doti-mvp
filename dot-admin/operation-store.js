@@ -1,4 +1,8 @@
 export const FILE_BUCKET = 'doti-files';
+const LOCAL_OPERATION_KEY = 'doti-agency-live-v4';
+const LEGACY_LOCAL_OPERATION_KEY = 'doti-agency-live-v3';
+const LOCAL_FILE_DB_NAME = 'doti-operation-files-v1';
+const LOCAL_FILE_STORE = 'files';
 const OPERATION_TABLES = [
   'agency_groups',
   'workflows',
@@ -30,6 +34,21 @@ export async function waitForOperationContext() {
 }
 
 export async function loadAgencyState() {
+  const auth = await waitForOperationContext();
+  if (auth.localMode) {
+    const current = readLocalState(LOCAL_OPERATION_KEY);
+    const legacy = current ? null : readLocalState(LEGACY_LOCAL_OPERATION_KEY);
+    const loaded = current || legacy;
+    if (!loaded) return { version: 4, initialized: false, revision: 0 };
+    const normalized = {
+      ...loaded,
+      version: 4,
+      initialized: true,
+      revision: Number(loaded.revision || 0)
+    };
+    indexFilePaths(normalized);
+    return normalized;
+  }
   const data = await callRpc('load_agency_state');
   const loaded = data || { version: 4, initialized: false, revision: 0 };
   indexFilePaths(loaded);
@@ -38,6 +57,25 @@ export async function loadAgencyState() {
 
 export async function saveAgencyState(state, expectedRevision) {
   const payload = sanitizeStateForSave(state);
+  const auth = await waitForOperationContext();
+  if (auth.localMode) {
+    const current = readLocalState(LOCAL_OPERATION_KEY);
+    const currentRevision = Number(current?.revision || 0);
+    if (currentRevision !== Number(expectedRevision || 0)) {
+      const error = new Error('Os dados locais foram alterados em outra aba.');
+      error.code = '40001';
+      throw error;
+    }
+    const revision = currentRevision + 1;
+    localStorage.setItem(LOCAL_OPERATION_KEY, JSON.stringify({
+      ...payload,
+      version: 4,
+      initialized: true,
+      revision
+    }));
+    indexFilePaths(payload);
+    return revision;
+  }
   const data = await callRpc('save_agency_state', {
     p_state: payload,
     p_expected_revision: expectedRevision
@@ -47,6 +85,8 @@ export async function saveAgencyState(state, expectedRevision) {
 
 export async function importLegacyAgencyState(state, fingerprint, counts, expectedRevision = 0) {
   const payload = sanitizeStateForSave(state);
+  const auth = await waitForOperationContext();
+  if (auth.localMode) return saveAgencyState(payload, expectedRevision);
   const data = await callRpc('import_legacy_state', {
     p_state: payload,
     p_fingerprint: fingerprint,
@@ -84,8 +124,9 @@ export function subscribeToAgencyChanges(agencyId, onChange) {
   let timer;
   let stopped = false;
   const start = async () => {
-    const { supabase } = await waitForOperationContext();
+    const { supabase, localMode } = await waitForOperationContext();
     if (stopped) return null;
+    if (localMode) return null;
     let channel = supabase.channel(`doti-operation-${agencyId}`);
     OPERATION_TABLES.forEach(table => {
       channel = channel.on('postgres_changes', {
@@ -111,7 +152,13 @@ export function subscribeToAgencyChanges(agencyId, onChange) {
 }
 
 export async function uploadOperationFile(id, file) {
-  const { supabase, profile } = await waitForOperationContext();
+  const { supabase, profile, localMode } = await waitForOperationContext();
+  if (localMode) {
+    const path = `local:${id}`;
+    await writeLocalFile(String(id), file);
+    filePaths.set(String(id), path);
+    return path;
+  }
   const path = filePaths.get(String(id))
     || `${profile.agency_id}/files/${id}/${safeFileName(file.name)}`;
   const { error } = await supabase.storage.from(FILE_BUCKET).upload(path, file, {
@@ -125,18 +172,24 @@ export async function uploadOperationFile(id, file) {
 }
 
 export async function downloadOperationFile(id) {
-  const { supabase } = await waitForOperationContext();
+  const { supabase, localMode } = await waitForOperationContext();
   const path = filePaths.get(String(id));
   if (!path) return null;
+  if (localMode) return readLocalFile(String(id));
   const { data, error } = await supabase.storage.from(FILE_BUCKET).download(path);
   if (error) throw error;
   return data;
 }
 
 export async function removeOperationFile(id) {
-  const { supabase } = await waitForOperationContext();
+  const { supabase, localMode } = await waitForOperationContext();
   const path = filePaths.get(String(id));
   if (!path) return;
+  if (localMode) {
+    await deleteLocalFile(String(id));
+    filePaths.delete(String(id));
+    return;
+  }
   const { error } = await supabase.storage.from(FILE_BUCKET).remove([path]);
   if (error) throw error;
   filePaths.delete(String(id));
@@ -268,7 +321,8 @@ export function legacyCounts(state) {
 }
 
 export async function uploadLegacyFiles(state, fileIdMap, resolveLegacyFile, fingerprint) {
-  const { supabase, profile } = await waitForOperationContext();
+  const { supabase, profile, localMode } = await waitForOperationContext();
+  if (localMode) return { uploadedPaths: [], missing: [] };
   const uploadedPaths = [];
   const missing = [];
   const upload = async (legacyId, currentId, metadata) => {
@@ -330,7 +384,13 @@ export async function uploadLegacyFiles(state, fileIdMap, resolveLegacyFile, fin
 
 export async function removeStoragePaths(paths) {
   if (!paths.length) return;
-  const { supabase } = await waitForOperationContext();
+  const { supabase, localMode } = await waitForOperationContext();
+  if (localMode) {
+    await Promise.all(paths
+      .filter(path => String(path).startsWith('local:'))
+      .map(path => deleteLocalFile(String(path).slice(6))));
+    return;
+  }
   const { error } = await supabase.storage.from(FILE_BUCKET).remove(paths);
   if (error) throw error;
 }
@@ -355,7 +415,70 @@ function indexFilePaths(state) {
   (state.files || []).forEach(file => {
     if (file.id && file.storagePath) filePaths.set(String(file.id), file.storagePath);
   });
+  (state.clients || []).forEach(client => {
+    if (client.logoId && client.logoStoragePath) {
+      filePaths.set(String(client.logoId), client.logoStoragePath);
+    }
+    (client.workspace || []).forEach(block => {
+      if (block.fileId && block.storagePath) filePaths.set(String(block.fileId), block.storagePath);
+    });
+  });
+  (state.deliverables || []).forEach(deliverable => {
+    (deliverable.attachments || []).forEach(attachment => {
+      if (attachment.id && attachment.storagePath) {
+        filePaths.set(String(attachment.id), attachment.storagePath);
+      }
+    });
+  });
   attachKnownFilePaths(state);
+}
+
+function readLocalState(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || 'null');
+  } catch (_) {
+    return null;
+  }
+}
+
+function openLocalFileDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(LOCAL_FILE_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(LOCAL_FILE_STORE)) {
+        request.result.createObjectStore(LOCAL_FILE_STORE);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function useLocalFileStore(mode, action) {
+  const database = await openLocalFileDatabase();
+  try {
+    return await new Promise((resolve, reject) => {
+      const transaction = database.transaction(LOCAL_FILE_STORE, mode);
+      const request = action(transaction.objectStore(LOCAL_FILE_STORE));
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+  } finally {
+    database.close();
+  }
+}
+
+function writeLocalFile(id, file) {
+  return useLocalFileStore('readwrite', store => store.put(file, id));
+}
+
+function readLocalFile(id) {
+  return useLocalFileStore('readonly', store => store.get(id));
+}
+
+function deleteLocalFile(id) {
+  return useLocalFileStore('readwrite', store => store.delete(id));
 }
 
 function findLegacyId(map, currentId) {

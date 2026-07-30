@@ -36,9 +36,16 @@ create table if not exists public.profiles (
 );
 
 alter table public.profiles add column if not exists is_active boolean not null default true;
+alter table public.profiles add column if not exists avatar_url text;
 alter table public.profiles drop constraint if exists profiles_role_check;
 alter table public.profiles
   add constraint profiles_role_check check (role in ('owner', 'admin', 'member', 'viewer'));
+alter table public.profiles drop constraint if exists profiles_avatar_url_check;
+alter table public.profiles
+  add constraint profiles_avatar_url_check check (
+    avatar_url is null
+    or avatar_url ~ '^/assets/avatars-users/avatar-(0[1-9]|[12][0-9]|30)\.png$'
+  );
 
 create table if not exists public.team_invitations (
   id uuid primary key default gen_random_uuid(),
@@ -55,7 +62,9 @@ create table if not exists public.team_invitations (
 
 create index if not exists profiles_agency_id_idx on public.profiles(agency_id);
 create unique index if not exists profiles_email_unique_idx on public.profiles(lower(email));
+create index if not exists agencies_owner_id_idx on public.agencies(owner_id);
 create index if not exists team_invitations_agency_id_idx on public.team_invitations(agency_id);
+create index if not exists team_invitations_invited_by_idx on public.team_invitations(invited_by);
 create unique index if not exists team_invitations_pending_email_idx
   on public.team_invitations(agency_id, lower(email))
   where status = 'pending';
@@ -256,6 +265,8 @@ grant usage on schema public to authenticated;
 revoke all on function private.handle_new_doti_user() from public, anon, authenticated;
 revoke all on function private.set_updated_at() from public, anon, authenticated;
 grant select, update on public.agencies to authenticated;
-grant select, update on public.profiles to authenticated;
+revoke update on public.profiles from authenticated;
+grant select on public.profiles to authenticated;
+grant update (full_name, avatar_url) on public.profiles to authenticated;
 grant select on public.team_invitations to authenticated;
 grant select, insert, update, delete on public.agencies, public.profiles, public.team_invitations to service_role;
