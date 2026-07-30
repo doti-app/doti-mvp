@@ -1,3 +1,20 @@
+import {
+  attachKnownFilePaths,
+  canonicalizeLegacyState,
+  downloadOperationFile,
+  importLegacyAgencyState,
+  legacyCounts,
+  legacyFingerprint,
+  loadAgencyState,
+  removeOperationFile,
+  removeStoragePaths,
+  saveAgencyState,
+  subscribeToAgencyChanges,
+  uploadLegacyFiles,
+  uploadOperationFile,
+  waitForOperationContext
+} from '/dot-admin/operation-store.js?v=4';
+
 const STORAGE_KEY = 'doti-agency-live-v3';
 const SIDEBAR_STORAGE_KEY = 'doti-sidebar-collapsed';
 const pages = [...document.querySelectorAll('.page')];
@@ -5,7 +22,7 @@ const navItems = [...document.querySelectorAll('.nav-item[data-page]')];
 const toast = document.getElementById('toast');
 const ATTACHMENT_DB_NAME = 'doti-attachments-v1';
 const ATTACHMENT_STORE_NAME = 'files';
-const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024;
+const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024;
 let attachmentDbPromise;
 
 const COLORS = ['site', 'video', 'social', 'branding', 'copy'];
@@ -66,7 +83,19 @@ const EMPTY_STATE = {
   activity: []
 };
 
-let state = loadState();
+let state = normalizeWorkflowStepIds(structuredClone(EMPTY_STATE));
+const legacySnapshotExists = Boolean(localStorage.getItem(STORAGE_KEY));
+let legacyState = loadLegacyState();
+let operationRevision = 0;
+let queuedRevision = 0;
+let operationReady = false;
+let migrationPending = false;
+let persistQueue = [];
+let persistRunning = false;
+let persistEpoch = 0;
+let realtimeRefreshPending = false;
+let ignoreRealtimeUntil = 0;
+let unsubscribeRealtime;
 let demandView = 'board';
 let flowView = 'models';
 let selectedClientWorkspaceId = null;
@@ -74,7 +103,7 @@ let calendarCursor = new Date();
 calendarCursor.setDate(1);
 let selectedCalendarDate = localDateKey(new Date());
 
-function loadState() {
+function loadLegacyState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     if (saved?.version === 3 && Array.isArray(saved.projects) && Array.isArray(saved.workflows)) return normalizeWorkflowStepIds(saved);
@@ -124,7 +153,8 @@ function normalizeWorkflowStepIds(data) {
     delete deliverable.observations;
     const workflow = data.workflows.find(item => item.id === deliverable.workflowId);
     deliverable.steps.forEach((step, index) => {
-      step.sourceStepId ||= workflow?.steps[index]?.[2] || uid('ws');
+      if (!step.sourceStepId && workflow) step.sourceStepId = workflow.steps[index]?.[2] || uid('ws');
+      if (!step.sourceStepId) step.sourceStepId = '';
     });
   });
   return data;
@@ -145,16 +175,7 @@ function openAttachmentDb() {
   });
   return attachmentDbPromise;
 }
-async function storeAttachmentFile(id, file) {
-  const db = await openAttachmentDb();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(ATTACHMENT_STORE_NAME, 'readwrite');
-    transaction.objectStore(ATTACHMENT_STORE_NAME).put(file, id);
-    transaction.oncomplete = resolve;
-    transaction.onerror = () => reject(transaction.error);
-  });
-}
-async function getAttachmentFile(id) {
+async function getLegacyAttachmentFile(id) {
   const db = await openAttachmentDb();
   return new Promise((resolve, reject) => {
     const request = db.transaction(ATTACHMENT_STORE_NAME).objectStore(ATTACHMENT_STORE_NAME).get(id);
@@ -162,26 +183,77 @@ async function getAttachmentFile(id) {
     request.onerror = () => reject(request.error);
   });
 }
-async function deleteAttachmentFile(id) {
-  const db = await openAttachmentDb();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(ATTACHMENT_STORE_NAME, 'readwrite');
-    transaction.objectStore(ATTACHMENT_STORE_NAME).delete(id);
-    transaction.oncomplete = resolve;
-    transaction.onerror = () => reject(transaction.error);
-  });
-}
 function deleteStoredAttachments(deliverables) {
   deliverables.flatMap(item => item.attachments || []).forEach(attachment => {
     deleteAttachmentFile(attachment.id).catch(() => {});
   });
 }
+async function storeAttachmentFile(id, file) {
+  if (!operationReady) throw new Error('A operação ainda não foi carregada.');
+  return uploadOperationFile(id, file);
+}
+async function getAttachmentFile(id) {
+  if (!operationReady) return getLegacyAttachmentFile(id);
+  return downloadOperationFile(id);
+}
+async function deleteAttachmentFile(id) {
+  if (!operationReady) throw new Error('A operação ainda não foi migrada.');
+  return removeOperationFile(id);
+}
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   renderAll();
+  if (!operationReady) {
+    if (migrationPending) {
+      state = normalizeWorkflowStepIds(structuredClone(legacyState));
+      renderAll();
+      notify('Importação necessária', 'Confirme a migração antes de alterar a cópia oficial.', '!');
+    }
+    return Promise.resolve();
+  }
+  const snapshot = attachKnownFilePaths(structuredClone(state));
+  const expectedRevision = queuedRevision;
+  const epoch = persistEpoch;
+  queuedRevision += 1;
+  const completion = new Promise(resolve => {
+    persistQueue.push({ snapshot, expectedRevision, epoch, resolve });
+  });
+  flushPersistQueue();
+  return completion;
+}
+async function flushPersistQueue() {
+  if (persistRunning) return;
+  persistRunning = true;
+  try {
+    while (persistQueue.length) {
+      const entry = persistQueue.shift();
+      if (entry.epoch !== persistEpoch) {
+        entry.resolve(false);
+        continue;
+      }
+      try {
+        operationRevision = await saveAgencyState(entry.snapshot, entry.expectedRevision);
+        queuedRevision = Math.max(queuedRevision, operationRevision);
+        ignoreRealtimeUntil = Date.now() + 1200;
+        entry.resolve(true);
+      } catch (error) {
+        persistEpoch += 1;
+        persistQueue.splice(0).forEach(pending => pending.resolve(false));
+        realtimeRefreshPending = false;
+        await handlePersistenceError(error);
+        queuedRevision = operationRevision;
+        entry.resolve(false);
+        break;
+      }
+    }
+  } finally {
+    persistRunning = false;
+    if (realtimeRefreshPending && !persistQueue.length && !document.querySelector('.doti-modal, .attachment-preview-layer')) {
+      refreshOperationFromServer();
+    }
+  }
 }
 function uid(prefix) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  return crypto.randomUUID();
 }
 function logActivity(action, detail) {
   state.activity.unshift({ id: uid('a'), action, detail, at: new Date().toISOString() });
@@ -463,7 +535,7 @@ function renderClientWorkspace(client) {
     if (!file) return;
     const isImage = file.type.startsWith('image/');
     const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
-    if ((!isImage && !isPdf) || file.size > MAX_ATTACHMENT_SIZE) return notify('Arquivo não permitido', 'Use uma imagem ou PDF de até 100 MB.', '!');
+    if ((!isImage && !isPdf) || file.size > MAX_ATTACHMENT_SIZE) return notify('Arquivo não permitido', 'Use uma imagem ou PDF de até 50 MB.', '!');
     const fileId = uid('client-file');
     try {
       await storeAttachmentFile(fileId, file);
@@ -910,7 +982,7 @@ function renderDeliverableAttachments(deliverable) {
       <button type="button" data-download-attachment="${attachment.id}" aria-label="Baixar ${escapeAttr(attachment.name)}" title="Baixar anexo">↓</button>
       <button type="button" data-delete-attachment="${attachment.id}" aria-label="Remover ${escapeAttr(attachment.name)}" title="Remover anexo">×</button>
     </article>`).join('')}</div>` : '<p class="attachment-empty">Nenhum arquivo anexado até o momento.</p>'}
-    <label class="attachment-upload"><input type="file" accept="image/*,application/pdf,video/*,.pdf" multiple><span>＋</span><div><strong>Anexar arquivos</strong><small>Imagens, PDF ou vídeos · até 100 MB por arquivo</small></div></label>
+    <label class="attachment-upload"><input type="file" accept="image/*,application/pdf,video/*,.pdf" multiple><span>＋</span><div><strong>Anexar arquivos</strong><small>Imagens, PDF ou vídeos · até 50 MB por arquivo</small></div></label>
   </section>`;
 }
 
@@ -1192,7 +1264,7 @@ function openDeliverable(id) {
           continue;
         }
         if (file.size > MAX_ATTACHMENT_SIZE) {
-          notify('Arquivo muito grande', `${file.name} ultrapassa o limite de 100 MB.`, '!');
+          notify('Arquivo muito grande', `${file.name} ultrapassa o limite de 50 MB.`, '!');
           continue;
         }
         try {
@@ -1806,6 +1878,17 @@ function openModal(title, body, onSubmit, submitLabel = 'Salvar', afterOpen) {
 }
 function closeModal() {
   document.querySelector('.doti-modal')?.remove();
+  if (realtimeRefreshPending && operationReady && !persistRunning && !persistQueue.length) {
+    refreshOperationFromServer();
+  }
+}
+async function refreshOperationFromServer() {
+  realtimeRefreshPending = false;
+  try {
+    applyLoadedState(await loadAgencyState());
+  } catch (_) {
+    notify('Não foi possível sincronizar', 'Tente novamente em instantes.', '!');
+  }
 }
 function confirmAction(title, message, action) {
   const currentModal = document.querySelector('.doti-modal');
@@ -1866,7 +1949,10 @@ function openRejectionDialog(deliverable, project, approvalStep, deliverableForm
 }
 
 function exportBackup() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const backup = attachKnownFilePaths(structuredClone(state));
+  backup.version = 4;
+  backup.exportedAt = new Date().toISOString();
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = `doti-backup-${new Date().toISOString().slice(0, 10)}.json`;
@@ -1875,19 +1961,208 @@ function exportBackup() {
   notify('Backup exportado', 'Guarde o arquivo em um local seguro.');
 }
 function importBackup(file) {
+  if (!['owner', 'admin'].includes(window.dotiAuthContext?.profile?.role)) {
+    notify('Acesso restrito', 'Somente proprietário ou administrador pode restaurar um backup.', '!');
+    return;
+  }
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     try {
       const imported = JSON.parse(reader.result);
-      if (imported?.version !== 3 || !Array.isArray(imported.projects) || !Array.isArray(imported.workflows)) throw new Error();
-      state = normalizeWorkflowStepIds(imported);
-      saveState();
-      notify('Backup restaurado', 'Os dados importados já estão disponíveis.');
-    } catch (_) {
-      notify('Arquivo inválido', 'Selecione um backup criado por esta versão do Doti.');
+      if (![3, 4].includes(imported?.version) || !Array.isArray(imported.projects) || !Array.isArray(imported.workflows)) throw new Error('invalid');
+      const normalized = normalizeWorkflowStepIds(imported);
+      state = imported.version === 3 ? canonicalizeLegacyState(normalized).state : normalized;
+      operationRevision = await saveAgencyState(state, operationRevision);
+      queuedRevision = operationRevision;
+      ignoreRealtimeUntil = Date.now() + 1200;
+      renderAll();
+      notify('Backup restaurado', 'Os dados importados já estão disponíveis para a agência.');
+    } catch (error) {
+      notify(
+        error.message === 'invalid' ? 'Arquivo inválido' : 'Não foi possível importar',
+        error.message === 'invalid'
+          ? 'Selecione um backup das versões 3 ou 4 do Doti.'
+          : 'Os dados compartilhados não foram alterados.',
+        '!'
+      );
     }
   };
   reader.readAsText(file);
+}
+
+async function handlePersistenceError(error) {
+  console.error('Doti operation save failed', error);
+  notify(
+    error?.code === '40001' ? 'Alterações mais recentes encontradas' : 'Não foi possível salvar',
+    error?.code === '40001'
+      ? 'Outra pessoa atualizou a operação. Recarregamos a versão compartilhada.'
+      : 'A alteração não foi confirmada pelo servidor e a versão compartilhada será restaurada.',
+    '!'
+  );
+  try {
+    const loaded = await loadAgencyState();
+    applyLoadedState(loaded);
+  } catch (_) {
+    document.documentElement.classList.add('operation-error');
+  }
+}
+
+function applyLoadedState(loaded) {
+  operationRevision = Number(loaded.revision || 0);
+  if (!persistRunning && !persistQueue.length) queuedRevision = operationRevision;
+  state = normalizeWorkflowStepIds({
+    version: 4,
+    groups: loaded.groups || [],
+    workflows: loaded.workflows || [],
+    clients: loaded.clients || [],
+    projects: loaded.projects || [],
+    deliverables: loaded.deliverables || [],
+    activity: loaded.activity || []
+  });
+  attachKnownFilePaths(state);
+  renderAll();
+  showPage(location.hash.slice(1) || 'dashboard');
+}
+
+function legacyHasOperation(data) {
+  return legacySnapshotExists || Boolean(
+    data?.clients?.length
+    || data?.projects?.length
+    || data?.deliverables?.length
+    || data?.activity?.length
+    || (data?.workflows || []).some(workflow => !String(workflow.id).startsWith('wf-'))
+  );
+}
+
+function showLegacyMigration(profile) {
+  migrationPending = true;
+  state = normalizeWorkflowStepIds(structuredClone(legacyState));
+  renderAll();
+  const counts = legacyCounts(state);
+  const modal = document.createElement('div');
+  modal.className = 'doti-modal migration-modal';
+  modal.innerHTML = `
+    <div class="migration-card">
+      <header><div><span class="eyebrow">MIGRAÇÃO SEGURA</span><h2>Levar esta operação para o espaço compartilhado</h2></div></header>
+      <p>Este navegador será usado como a cópia oficial da agência. Depois da confirmação, outras cópias locais não poderão substituir estes dados.</p>
+      <div class="migration-counts">
+        <article><strong>${counts.clients}</strong><span>clientes</span></article>
+        <article><strong>${counts.projects}</strong><span>projetos</span></article>
+        <article><strong>${counts.deliverables}</strong><span>entregáveis</span></article>
+        <article><strong>${counts.tasks}</strong><span>tarefas</span></article>
+        <article><strong>${counts.files}</strong><span>arquivos</span></article>
+      </div>
+      <div class="migration-status" role="status" aria-live="polite"></div>
+      <footer><button type="button" class="outline-btn" data-migrate-later>Fazer depois</button><button type="button" class="primary-btn" data-migrate>Confirmar e migrar</button></footer>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector('[data-migrate-later]').onclick = () => {
+    modal.remove();
+    notify('Migração pendente', 'A operação está disponível para revisão, mas alterações não serão salvas até a confirmação.', '!');
+  };
+  modal.querySelector('[data-migrate]').onclick = async () => {
+    const button = modal.querySelector('[data-migrate]');
+    const later = modal.querySelector('[data-migrate-later]');
+    const status = modal.querySelector('.migration-status');
+    button.disabled = true;
+    later.disabled = true;
+    status.textContent = 'Preparando dados e verificando arquivos…';
+    let uploadedPaths = [];
+    try {
+      const fingerprint = await legacyFingerprint(legacyState);
+      const canonical = canonicalizeLegacyState(normalizeWorkflowStepIds(structuredClone(legacyState)));
+      status.textContent = 'Enviando logos, imagens, PDFs, vídeos e anexos…';
+      const upload = await uploadLegacyFiles(
+        canonical.state,
+        canonical.fileIdMap,
+        getLegacyAttachmentFile,
+        fingerprint
+      );
+      uploadedPaths = upload.uploadedPaths;
+      status.textContent = 'Gravando a operação compartilhada…';
+      operationRevision = await importLegacyAgencyState(canonical.state, fingerprint, counts, 0);
+      queuedRevision = operationRevision;
+      const loaded = await loadAgencyState();
+      operationReady = true;
+      migrationPending = false;
+      applyLoadedState(loaded);
+      bindRealtime(profile.agency_id);
+      document.querySelector('.storage-note span').textContent = 'Dados protegidos e compartilhados';
+      modal.remove();
+      notify(
+        'Migração concluída',
+        upload.missing.length
+          ? `${upload.missing.length} arquivo(s) ausente(s) foram ignorados; os demais dados já estão compartilhados.`
+          : 'A equipe já pode continuar de qualquer dispositivo.'
+      );
+    } catch (error) {
+      if (uploadedPaths.length) await removeStoragePaths(uploadedPaths).catch(() => {});
+      button.disabled = false;
+      later.disabled = false;
+      status.textContent = error?.message || 'A migração não foi concluída.';
+      status.classList.add('error');
+    }
+  };
+}
+
+function bindRealtime(agencyId) {
+  unsubscribeRealtime?.();
+  unsubscribeRealtime = subscribeToAgencyChanges(agencyId, async () => {
+    if (!operationReady || Date.now() < ignoreRealtimeUntil) return;
+    if (persistRunning || persistQueue.length) {
+      realtimeRefreshPending = true;
+      return;
+    }
+    if (document.querySelector('.doti-modal, .attachment-preview-layer')) {
+      realtimeRefreshPending = true;
+      notify('Atualização disponível', 'Outra pessoa alterou a operação. A tela será atualizada ao fechar a janela.');
+      return;
+    }
+    try {
+      applyLoadedState(await loadAgencyState());
+    } catch (_) {
+      notify('Não foi possível sincronizar', 'Tente novamente em instantes.', '!');
+    }
+  });
+}
+
+function applyOperationRole(profile) {
+  document.body.classList.toggle('member-access', profile.role === 'member');
+  document.body.classList.toggle('viewer-access', profile.role === 'viewer');
+}
+
+async function initializeOperation() {
+  try {
+    const { profile } = await waitForOperationContext();
+    applyOperationRole(profile);
+    const loaded = await loadAgencyState();
+    operationRevision = Number(loaded.revision || 0);
+    queuedRevision = operationRevision;
+
+    if (!loaded.initialized) {
+      if (profile.role === 'owner' && legacyHasOperation(legacyState)) {
+        showLegacyMigration(profile);
+        return;
+      }
+      if (!['owner', 'admin'].includes(profile.role)) {
+        throw new Error('A operação precisa ser inicializada por um proprietário ou administrador.');
+      }
+      const defaults = canonicalizeLegacyState(normalizeWorkflowStepIds(structuredClone(EMPTY_STATE))).state;
+      operationRevision = await saveAgencyState(defaults, 0);
+      queuedRevision = operationRevision;
+    }
+
+    applyLoadedState(await loadAgencyState());
+    operationReady = true;
+    bindRealtime(profile.agency_id);
+    document.querySelector('.storage-note span').textContent = 'Dados protegidos e compartilhados';
+  } catch (error) {
+    console.error('Doti operation bootstrap failed', error);
+    document.documentElement.classList.add('operation-error');
+    notify('Não foi possível carregar a operação', 'Verifique a conexão e tente recarregar a página.', '!');
+  } finally {
+    document.documentElement.classList.remove('operation-pending');
+  }
 }
 
 function emptyBlock(title, message, icon, action = '') {
@@ -1966,5 +2241,4 @@ document.addEventListener('keydown', event => {
   closeModal();
 });
 
-renderAll();
-showPage(location.hash.slice(1) || 'dashboard');
+initializeOperation();

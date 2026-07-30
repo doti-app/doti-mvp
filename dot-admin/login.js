@@ -193,13 +193,10 @@ async function handleInvite() {
   if (!validatePassword(true)) return;
   const { error } = await supabase.auth.updateUser({ password: passwordInput.value });
   if (error) throw error;
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session) {
-    await fetch('/api/accept-invite', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${session.access_token}` }
-    }).catch(() => {});
-  }
+  const { error: acceptError } = await supabase.functions.invoke('team-admin', {
+    body: { action: 'accept_invite' }
+  });
+  if (acceptError) throw acceptError;
   location.replace('../index.html');
 }
 

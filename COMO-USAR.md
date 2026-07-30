@@ -249,7 +249,7 @@ Para restaurar, use **Importar backup** na Visão geral e selecione um arquivo g
 
 Recomenda-se exportar um backup regularmente, especialmente antes de limpar dados do navegador ou mudar de computador.
 
-## Autenticação e limitações atuais
+## Autenticação e operação compartilhada
 
 A identificação de usuários utiliza Supabase Auth:
 
@@ -261,13 +261,25 @@ A identificação de usuários utiliza Supabase Auth:
 - perfil vinculado à agência e papel de proprietário, administrador ou membro;
 - proteção do painel para visitantes sem sessão.
 
-O deploy precisa das variáveis `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY`. Execute `supabase-auth.sql` no SQL Editor do Supabase e configure `https://doti-mvp.vercel.app/dot-admin/` entre as URLs autorizadas do projeto.
+O deploy precisa apenas das variáveis públicas `SUPABASE_URL` e
+`SUPABASE_PUBLISHABLE_KEY`. As migrations versionadas em `supabase/migrations`
+configuram autenticação, operação, RLS, Storage e Realtime. A função
+`team-admin` mantém as operações privilegiadas dentro do Supabase, sem chave
+administrativa no Vercel.
 
-Os dados operacionais da aplicação ainda usam o armazenamento do navegador:
+Os dados operacionais usam tabelas multiagência no Supabase:
 
-- não sincroniza entre computadores;
-- não permite trabalho simultâneo de várias pessoas;
-- os dados podem ser perdidos se o armazenamento do site for apagado.
+- cada registro é isolado pelo `agency_id` e por políticas RLS;
+- alterações são sincronizadas entre dispositivos e integrantes;
+- logos, imagens, PDFs, vídeos e anexos ficam em um bucket privado;
+- conflitos simultâneos são detectados pela revisão da operação;
+- o armazenamento do navegador fica restrito à sessão, preferências visuais e
+  à cópia legada preservada durante a migração.
+
+No primeiro acesso após a atualização, o proprietário verá um resumo dos dados
+locais. Ao confirmar, aquele navegador será tratado como a cópia oficial. Os
+arquivos presentes serão enviados ao Storage e arquivos locais ausentes serão
+relatados sem gerar referências quebradas.
 
 ## Arquivos do projeto
 
@@ -281,8 +293,10 @@ Os dados operacionais da aplicação ainda usam o armazenamento do navegador:
 - `dot-admin/login.js`: login, cadastro, confirmação e recuperação de senha.
 - `dot-admin/auth-guard.js`: proteção do painel, identificação do perfil e logout.
 - `dot-admin/supabase-client.js`: cliente compartilhado de autenticação.
+- `dot-admin/operation-store.js`: carregamento, gravação, Realtime, Storage e migração assistida.
 - `api/auth-config.js`: entrega segura da configuração pública no ambiente Vercel.
-- `supabase-auth.sql`: perfis, agências, papéis, políticas de segurança e automações.
+- `supabase/migrations/`: autenticação, tabelas operacionais, RLS, RPCs, Storage e Realtime.
+- `supabase/functions/team-admin/`: convites e administração privilegiada da equipe.
 - `.env.example`: nomes das variáveis exigidas no deploy.
 
 ## Primeiro uso recomendado
@@ -297,15 +311,15 @@ Os dados operacionais da aplicação ainda usam o armazenamento do navegador:
 # Administração da equipe
 
 O primeiro cadastro da agência recebe o nível **Proprietário**. Para liberar
-acessos individuais, execute novamente o arquivo `supabase-auth.sql` no SQL
-Editor do Supabase e configure no Vercel:
+acessos individuais, aplique as migrations, publique a função `team-admin` e
+configure no Vercel:
 
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
-- `SUPABASE_SECRET_KEY`
 
-A chave secreta deve existir apenas nas variáveis de ambiente do Vercel. Nunca
-adicione essa chave ao navegador, ao GitHub ou ao arquivo `api/auth-config.js`.
+A chave administrativa é fornecida automaticamente pelo ambiente seguro das
+Edge Functions. Nunca adicione essa chave ao navegador, ao Vercel, ao GitHub ou
+ao arquivo `api/auth-config.js`.
 
 Depois, entre como proprietário e abra **Equipe**:
 
