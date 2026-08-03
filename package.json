@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "node local-server.js"
+    "dev": "node local-server.js",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.57.4"

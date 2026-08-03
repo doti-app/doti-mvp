@@ -55,7 +55,9 @@ function localOwnerProfile() {
 
 function memberAvatar(member) {
   const avatarUrl = String(member.avatar_url || '');
-  if (/^\/assets\/avatars-users\/avatar-\d{2}\.png$/.test(avatarUrl)) {
+  const isPreset = /^\/assets\/avatars-users\/avatar-\d{2}\.png$/.test(avatarUrl);
+  const isLocalPhoto = /^data:image\/(jpeg|png|webp);base64,[a-z0-9+/=]+$/i.test(avatarUrl) && avatarUrl.length <= 900000;
+  if (isPreset || isLocalPhoto) {
     return `<img src="${escapeHtml(avatarUrl)}" alt="" loading="lazy">`;
   }
   return escapeHtml(initials(member.full_name));

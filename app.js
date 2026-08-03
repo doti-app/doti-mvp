@@ -14,11 +14,13 @@ import {
   uploadOperationFile,
   waitForOperationContext
 } from '/dot-admin/operation-store.js?v=4';
+import { analyzeVirgulinhaCommand } from '/dot-admin/virgulinha-engine.mjs?v=2';
 
 const STORAGE_KEY = 'doti-agency-live-v3';
 const SIDEBAR_STORAGE_KEY = 'doti-sidebar-collapsed';
 const pages = [...document.querySelectorAll('.page')];
 const navItems = [...document.querySelectorAll('.nav-item[data-page]')];
+const profileSettingsEntry = document.getElementById('profileSettingsEntry');
 const toast = document.getElementById('toast');
 const ATTACHMENT_DB_NAME = 'doti-attachments-v1';
 const ATTACHMENT_STORE_NAME = 'files';
@@ -274,6 +276,8 @@ function showPage(id) {
   if (!document.getElementById(id)) id = 'dashboard';
   pages.forEach(page => page.classList.toggle('active', page.id === id));
   navItems.forEach(item => item.classList.toggle('active', item.dataset.page === id));
+  profileSettingsEntry?.classList.toggle('active', id === 'meus-dados');
+  profileSettingsEntry?.setAttribute('aria-current', id === 'meus-dados' ? 'page' : 'false');
   history.replaceState(null, '', id === 'dashboard' ? location.pathname : `#${id}`);
   if (id === 'dashboard') renderDashboard();
   if (id === 'demandas') renderDemands();
@@ -1082,10 +1086,7 @@ function renderObservationLinks(text, savedLinks = []) {
   const links = observationLinksForDisplay(text, savedLinks);
   return links.length ? `<div class="observation-link-list"><span>LINKS DO ENTREGÁVEL</span>${links.map(link => `<a href="${escapeAttr(link.href)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(link.label)}"><b>↗</b><span><strong>${escapeHtml(link.name || observationLinkName(link.href))}</strong><small>${escapeHtml(link.label || link.href)}${link.stepName ? ` · adicionado em ${escapeHtml(link.stepName)}` : ''}</small></span></a>`).join('')}</div>` : '';
 }
-async function openAttachmentPreview(attachment) {
-  try {
-    const file = await getAttachmentFile(attachment.id);
-    if (!file) return notify('Arquivo indisponível', 'Este anexo não está salvo neste navegador.', '!');
+function showAttachmentPreview(file, attachment) {
     const url = URL.createObjectURL(file);
     const layer = document.createElement('div');
     layer.className = 'attachment-preview-layer';
@@ -1118,6 +1119,12 @@ async function openAttachmentPreview(attachment) {
     layer.onclick = event => { if (event.target === layer) close(); };
     document.body.appendChild(layer);
     layer.querySelector('[data-close-preview]').focus();
+}
+async function openAttachmentPreview(attachment) {
+  try {
+    const file = await getAttachmentFile(attachment.id);
+    if (!file) return notify('Arquivo indisponível', 'Este anexo não está salvo neste navegador.', '!');
+    showAttachmentPreview(file, attachment);
   } catch (_) {
     notify('Arquivo indisponível', 'Não foi possível visualizar este anexo.', '!');
   }
@@ -1913,13 +1920,88 @@ function openRejectionDialog(deliverable, project, approvalStep, deliverableForm
     <p>Escolha para qual etapa o entregável deve voltar e explique o que precisa ser ajustado.</p>
     <label>Etapa de retorno<select name="returnStep">${returnableSteps.map((item, index) => `<option value="${index}" ${index === returnableSteps.length - 1 ? 'selected' : ''}>${escapeHtml(item.name)} — ${escapeHtml(groupById(item.groupId).name)}</option>`).join('')}</select></label>
     <label>Motivo da recusa<textarea maxlength="500" rows="4" placeholder="Descreva os ajustes necessários"></textarea><small>Obrigatório para orientar a próxima pessoa responsável.</small></label>
+    <section class="rejection-attachments">
+      <label class="attachment-upload rejection-attachment-upload"><input type="file" accept="image/*,application/pdf,video/*,.pdf" multiple><span>＋</span><div><strong>Anexar ou arrastar arquivos</strong><small>Imagens, PDF ou vídeos · até 50 MB por arquivo</small></div></label>
+      <div class="rejection-file-list" aria-live="polite" hidden></div>
+    </section>
     <footer><button type="button" class="outline-btn" data-cancel>Cancelar</button><button type="button" class="reject-confirm-btn" data-confirm>Devolver para ajustes</button></footer>
   </div>`;
   currentModal.appendChild(layer);
   const textarea = layer.querySelector('textarea');
   const returnStepSelect = layer.querySelector('select[name="returnStep"]');
-  layer.querySelector('[data-cancel]').onclick = () => layer.remove();
-  layer.querySelector('[data-confirm]').onclick = () => {
+  const attachmentZone = layer.querySelector('.rejection-attachments');
+  const fileInput = layer.querySelector('.rejection-attachment-upload input[type="file"]');
+  const fileList = layer.querySelector('.rejection-file-list');
+  const cancelButton = layer.querySelector('[data-cancel]');
+  const confirmButton = layer.querySelector('[data-confirm]');
+  const selectedFiles = [];
+  const renderSelectedFiles = () => {
+    fileList.hidden = selectedFiles.length === 0;
+    fileList.innerHTML = selectedFiles.map((file, index) => `<article class="rejection-file-item" data-preview-rejection-file="${index}" role="button" tabindex="0" aria-label="Visualizar ${escapeAttr(file.name)}">
+      <span class="attachment-icon">${attachmentIcon(file)}</span>
+      <div><strong title="${escapeAttr(file.name)}">${escapeHtml(file.name)}</strong><small>${formatFileSize(file.size)} · clique para visualizar</small></div>
+      <button type="button" data-remove-rejection-file="${index}" aria-label="Remover ${escapeAttr(file.name)}">×</button>
+    </article>`).join('');
+    fileList.querySelectorAll('[data-preview-rejection-file]').forEach(item => {
+      const preview = event => {
+        if (event.target.closest('button')) return;
+        const file = selectedFiles[Number(item.dataset.previewRejectionFile)];
+        if (file) showAttachmentPreview(file, file);
+      };
+      item.onclick = preview;
+      item.onkeydown = event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        preview(event);
+      };
+    });
+    fileList.querySelectorAll('[data-remove-rejection-file]').forEach(button => {
+      button.onclick = () => {
+        selectedFiles.splice(Number(button.dataset.removeRejectionFile), 1);
+        renderSelectedFiles();
+      };
+    });
+  };
+  const addSelectedFiles = files => {
+    [...files].forEach(file => {
+      if (!isAcceptedAttachment(file)) {
+        notify('Formato não permitido', `${file.name} não é uma imagem, PDF ou vídeo.`, '!');
+        return;
+      }
+      if (file.size > MAX_ATTACHMENT_SIZE) {
+        notify('Arquivo muito grande', `${file.name} ultrapassa o limite de 50 MB.`, '!');
+        return;
+      }
+      const alreadySelected = selectedFiles.some(item => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified);
+      if (!alreadySelected) selectedFiles.push(file);
+    });
+    fileInput.value = '';
+    renderSelectedFiles();
+  };
+  fileInput.onchange = () => addSelectedFiles(fileInput.files);
+  const hasExternalFiles = event => [...(event.dataTransfer?.types || [])].includes('Files');
+  attachmentZone.ondragenter = event => {
+    if (!hasExternalFiles(event) || confirmButton.disabled) return;
+    event.preventDefault();
+    attachmentZone.classList.add('receiving-files');
+  };
+  attachmentZone.ondragover = event => {
+    if (!hasExternalFiles(event) || confirmButton.disabled) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    attachmentZone.classList.add('receiving-files');
+  };
+  attachmentZone.ondragleave = event => {
+    if (!attachmentZone.contains(event.relatedTarget)) attachmentZone.classList.remove('receiving-files');
+  };
+  attachmentZone.ondrop = event => {
+    if (!hasExternalFiles(event) || confirmButton.disabled) return;
+    event.preventDefault();
+    attachmentZone.classList.remove('receiving-files');
+    addSelectedFiles(event.dataTransfer.files);
+  };
+  cancelButton.onclick = () => layer.remove();
+  confirmButton.onclick = async () => {
     const reason = textarea.value.trim();
     if (!reason) {
       textarea.classList.add('invalid');
@@ -1929,20 +2011,60 @@ function openRejectionDialog(deliverable, project, approvalStep, deliverableForm
     const returnIndex = Number(returnStepSelect.value);
     const returnedStep = deliverable.steps[returnIndex];
     if (!returnedStep || returnIndex >= deliverable.stepIndex) return;
+    confirmButton.disabled = true;
+    cancelButton.disabled = true;
+    fileInput.disabled = true;
+    attachmentZone.classList.add('uploading');
+    confirmButton.textContent = selectedFiles.length ? 'Enviando arquivos…' : 'Devolvendo…';
+    const uploadedAttachments = [];
+    try {
+      for (const file of selectedFiles) {
+        const attachmentId = uid('att');
+        const storagePath = await storeAttachmentFile(attachmentId, file);
+        uploadedAttachments.push({
+          id: attachmentId,
+          storagePath,
+          name: file.name,
+          type: file.type || (/\.pdf$/i.test(file.name) ? 'application/pdf' : 'application/octet-stream'),
+          size: file.size,
+          createdAt: new Date().toISOString(),
+          stepIndex: deliverable.stepIndex,
+          stepName: approvalStep.name
+        });
+      }
+    } catch (_) {
+      await removeStoragePaths(uploadedAttachments.map(attachment => attachment.storagePath).filter(Boolean)).catch(() => {});
+      confirmButton.disabled = false;
+      cancelButton.disabled = false;
+      fileInput.disabled = false;
+      attachmentZone.classList.remove('uploading');
+      confirmButton.textContent = 'Devolver para ajustes';
+      notify('Não foi possível anexar', 'A devolução não foi concluída. Tente enviar os arquivos novamente.', '!');
+      return;
+    }
     approvalStep.note = field(deliverableForm, 'note').trim();
     syncDeliverableLinks(deliverable, approvalStep.note, approvalStep);
     const dateLabel = new Date().toLocaleDateString('pt-BR');
     const feedback = `Ajustes solicitados em ${dateLabel} por ${reviewer.name}:\n${reason}`;
     deliverable.note = [deliverable.note, feedback].filter(Boolean).join('\n\n');
+    deliverable.attachments.push(...uploadedAttachments);
     returnedStep.note = deliverable.note;
     returnedStep.tasks.push({ id: uid('t'), title: 'Aplicar ajustes solicitados na aprovação', done: false });
     deliverable.stepIndex = returnIndex;
     deliverable.status = 'active';
     project.updatedAt = new Date().toISOString();
     logActivity('Ajustes solicitados', `${deliverable.name} → ${returnedStep.name}: ${reason}`);
-    saveState();
+    const saved = await saveState();
+    if (!saved) {
+      await removeStoragePaths(uploadedAttachments.map(attachment => attachment.storagePath).filter(Boolean)).catch(() => {});
+      closeModal();
+      return;
+    }
     closeModal();
-    notify('Etapa devolvida', `O entregável voltou para ${returnedStep.name}.`, '!');
+    const attachmentMessage = uploadedAttachments.length
+      ? ` ${uploadedAttachments.length} ${uploadedAttachments.length === 1 ? 'arquivo foi anexado' : 'arquivos foram anexados'}.`
+      : '';
+    notify('Etapa devolvida', `O entregável voltou para ${returnedStep.name}.${attachmentMessage}`, '!');
   };
   textarea.oninput = () => textarea.classList.remove('invalid');
   textarea.focus();
@@ -2167,6 +2289,377 @@ async function initializeOperation() {
   }
 }
 
+const virgulinhaLauncher = document.getElementById('virgulinhaLauncher');
+const virgulinhaAssistant = document.getElementById('virgulinhaAssistant');
+const virgulinhaOverlay = document.getElementById('virgulinhaOverlay');
+const virgulinhaChat = document.getElementById('virgulinhaChat');
+const virgulinhaComposer = document.getElementById('virgulinhaComposer');
+const virgulinhaInput = document.getElementById('virgulinhaInput');
+let virgulinhaStarted = false;
+
+function appendVirgulinhaMessage(kind, html, className = '') {
+  const message = document.createElement('article');
+  message.className = `virgulinha-message ${kind} ${className}`.trim();
+  message.innerHTML = html;
+  virgulinhaChat.appendChild(message);
+  requestAnimationFrame(() => { virgulinhaChat.scrollTop = virgulinhaChat.scrollHeight; });
+  return message;
+}
+
+function startVirgulinhaConversation() {
+  if (virgulinhaStarted) return;
+  virgulinhaStarted = true;
+  appendVirgulinhaMessage('bot', `
+    <strong>Oi! O que vamos colocar para rodar?</strong>
+    <p>Escolha uma ação para eu perguntar somente o necessário, ou escreva o pedido completo no campo abaixo.</p>
+    <div class="virgulinha-start-actions">
+      <button type="button" data-virgulinha-start="project"><span>□</span><div><strong>Criar demanda</strong><small>Cliente, prazo e fluxos</small></div><b>→</b></button>
+      <button type="button" data-virgulinha-start="workflow"><span>↝</span><div><strong>Criar fluxo</strong><small>Etapas e responsáveis</small></div><b>→</b></button>
+    </div>`);
+}
+
+function openVirgulinha() {
+  startVirgulinhaConversation();
+  const exampleClient = state.clients[0]?.name || '[cliente]';
+  const exampleWorkflow = state.workflows.find(workflow => workflow.active !== false)?.name || '[fluxo]';
+  virgulinhaInput.placeholder = `Ex.: Crie uma demanda [nome] para ${exampleClient} com fluxo ${exampleWorkflow} prazo dd/mm/aaaa`;
+  virgulinhaAssistant.classList.add('open');
+  virgulinhaOverlay.classList.add('open');
+  virgulinhaAssistant.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('virgulinha-open');
+  setTimeout(() => virgulinhaInput.focus(), 180);
+}
+
+function closeVirgulinha() {
+  virgulinhaAssistant.classList.remove('open');
+  virgulinhaOverlay.classList.remove('open');
+  virgulinhaAssistant.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('virgulinha-open');
+  virgulinhaLauncher?.focus();
+}
+
+function virgulinhaClientOptions(selectedId = '') {
+  return [...state.clients]
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+    .map(client => `<option value="${client.id}" ${client.id === selectedId ? 'selected' : ''}>${escapeHtml(client.name)}</option>`)
+    .join('');
+}
+
+function virgulinhaWorkflowOptions(selectedIds = []) {
+  const selected = new Set(selectedIds);
+  return state.workflows
+    .filter(workflow => workflow.active !== false)
+    .map(workflow => `<label><input type="checkbox" name="workflowIds" value="${workflow.id}" ${selected.has(workflow.id) ? 'checked' : ''}><span><strong>${escapeHtml(workflow.name)}</strong><small>${escapeHtml(workflow.category)} · ${workflow.steps.length} etapas</small></span></label>`)
+    .join('');
+}
+
+function closePendingVirgulinhaReviews() {
+  virgulinhaChat.querySelectorAll('.virgulinha-message.review:not(.completed)').forEach(message => message.remove());
+}
+
+function isoDateFromToday(days) {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + Number(days || 0));
+  return localDateKey(date);
+}
+
+function virgulinhaReviewSummary(form) {
+  const summary = form.querySelector('[data-virgulinha-summary]');
+  const submit = form.querySelector('[type="submit"]');
+  if (!summary || !submit) return;
+  if (form.matches('[data-virgulinha-project]')) {
+    const name = field(form, 'name').trim();
+    const clientSelect = form.elements.namedItem('clientId');
+    const clientName = clientSelect.options[clientSelect.selectedIndex]?.text || '';
+    const workflows = [...form.querySelectorAll('input[name="workflowIds"]:checked')];
+    const due = field(form, 'due');
+    const ready = Boolean(name && clientSelect.value && due && workflows.length);
+    summary.innerHTML = ready
+      ? `<strong>Pronto para criar</strong><span>${escapeHtml(name)} para ${escapeHtml(clientName)} · ${workflows.length} ${workflows.length === 1 ? 'entregável' : 'entregáveis'} · prazo ${formatDate(due)}</span>`
+      : '<strong>Complete o pedido</strong><span>Informe nome, cliente, prazo e pelo menos um fluxo.</span>';
+    submit.disabled = !ready;
+    return;
+  }
+  const name = field(form, 'name').trim();
+  const category = field(form, 'category').trim();
+  const rows = [...form.querySelectorAll('[data-virgulinha-step]')];
+  const validSteps = rows.filter(row => row.querySelector('[name="stepName"]').value.trim() && row.querySelector('[name="stepGroup"]').value);
+  const ready = Boolean(name && category && rows.length >= 2 && validSteps.length === rows.length);
+  summary.innerHTML = ready
+    ? `<strong>Pronto para criar</strong><span>${escapeHtml(name)} · ${escapeHtml(category)} · ${rows.length} etapas configuradas</span>`
+    : '<strong>Complete o pedido</strong><span>Informe nome, categoria e pelo menos duas etapas.</span>';
+  submit.disabled = !ready;
+}
+
+function bindVirgulinhaReview(form) {
+  form.addEventListener('input', () => virgulinhaReviewSummary(form));
+  form.addEventListener('change', event => {
+    if (event.target.matches('[name="stepGroup"]')) event.target.dataset.autoGroup = 'false';
+    virgulinhaReviewSummary(form);
+  });
+  virgulinhaReviewSummary(form);
+}
+
+function renderVirgulinhaProjectReview(fields = {}, guided = false) {
+  if (!state.clients.length || !state.workflows.some(workflow => workflow.active !== false)) {
+    const missingClient = !state.clients.length;
+    appendVirgulinhaMessage('bot', `<strong>Antes desse pedido, falta uma configuração.</strong><p>${missingClient ? 'Cadastre pelo menos um cliente' : 'Crie ou ative pelo menos um fluxo'} e volte aqui para eu montar a demanda.</p><button type="button" class="virgulinha-inline-action" data-virgulinha-page="${missingClient ? 'clientes' : 'fluxos'}">Abrir ${missingClient ? 'clientes' : 'fluxos'} →</button>`);
+    return;
+  }
+  closePendingVirgulinhaReviews();
+  const message = appendVirgulinhaMessage('bot', `
+    <strong>${guided ? 'Vamos criar uma demanda.' : 'Organizei o seu pedido de demanda.'}</strong>
+    <p>${guided ? 'Responda estes quatro pontos. Nada será criado antes da sua confirmação.' : 'Mantive apenas o que reconheci no texto. Complete ou corrija o restante.'}</p>
+    <form class="virgulinha-review" data-virgulinha-project>
+      <label><span><b>1</b> O que precisa ser feito?</span><input name="name" maxlength="100" required value="${escapeAttr(fields.name || '')}" placeholder="Ex.: Campanha de Dia dos Pais"></label>
+      <div class="virgulinha-form-grid">
+        <label><span><b>2</b> Para qual cliente?</span><select name="clientId" required><option value="">Escolha um cliente</option>${virgulinhaClientOptions(fields.clientId || '')}</select></label>
+        <label><span><b>3</b> Qual é o prazo?</span><input type="date" name="due" required value="${escapeAttr(fields.due || '')}"><div class="virgulinha-date-shortcuts"><button type="button" data-virgulinha-date-days="1">Amanhã</button><button type="button" data-virgulinha-date-days="7">+7 dias</button><button type="button" data-virgulinha-date-days="15">+15 dias</button><button type="button" data-virgulinha-date-days="30">+30 dias</button></div></label>
+      </div>
+      <fieldset><legend><b>4</b> Quais entregáveis esta demanda deve gerar?</legend><div class="virgulinha-workflows">${virgulinhaWorkflowOptions(fields.workflowIds || [])}</div></fieldset>
+      <div class="virgulinha-command-summary" data-virgulinha-summary></div>
+      <footer><button type="button" class="outline-btn" data-virgulinha-cancel>Cancelar</button><button type="submit" class="primary-btn">Confirmar e criar</button></footer>
+    </form>`, 'review');
+  const form = message.querySelector('form');
+  bindVirgulinhaReview(form);
+  setTimeout(() => form.elements.namedItem('name').focus(), 50);
+}
+
+function guessVirgulinhaGroupId(stepName) {
+  const value = normalize(stepName);
+  const rules = [
+    [/cliente|aprovacao do cliente/, 'cliente'], [/design|layout|criacao/, 'design'], [/copy|texto|roteiro/, 'copy'],
+    [/video|captacao|edicao/, 'video'], [/desenvolvimento|site|publicacao/, 'desenvolvimento'],
+    [/planejamento|pesquisa|estrategia/, 'planejamento'], [/branding|identidade|marca/, 'branding'],
+    [/revisao interna|aprovacao interna|coordenacao/, 'coordenacao'], [/briefing|entrega|atendimento/, 'atendimento']
+  ];
+  const groupHint = rules.find(([pattern]) => pattern.test(value))?.[1] || 'atendimento';
+  return state.groups.find(group => normalize(group.name).includes(groupHint))?.id || state.groups[0]?.id || '';
+}
+
+function virgulinhaGroupOptions(selectedId) {
+  return `<option value="">Escolha o grupo</option>${state.groups.map(group => `<option value="${group.id}" ${group.id === selectedId ? 'selected' : ''}>${escapeHtml(group.name)}</option>`).join('')}`;
+}
+
+function virgulinhaStepRow(name = '', groupId = '') {
+  const selectedGroupId = groupId || (name ? guessVirgulinhaGroupId(name) : '');
+  return `<div class="virgulinha-step-row" data-virgulinha-step><span class="virgulinha-step-index"></span><input name="stepName" maxlength="80" required value="${escapeAttr(name)}" placeholder="Nome da etapa"><select name="stepGroup" data-auto-group="true" aria-label="Grupo responsável">${virgulinhaGroupOptions(selectedGroupId)}</select><button type="button" data-virgulinha-remove-step aria-label="Remover etapa">×</button></div>`;
+}
+
+function refreshVirgulinhaSteps(form) {
+  const rows = [...form.querySelectorAll('[data-virgulinha-step]')];
+  rows.forEach((row, index) => {
+    row.querySelector('.virgulinha-step-index').textContent = index + 1;
+    row.querySelector('[data-virgulinha-remove-step]').disabled = rows.length <= 2;
+  });
+  virgulinhaReviewSummary(form);
+}
+
+function renderVirgulinhaWorkflowReview(fields = {}, guided = false) {
+  if (state.groups.length < 1) {
+    appendVirgulinhaMessage('bot', '<strong>Não encontrei grupos responsáveis.</strong><p>Configure pelo menos um grupo na área de fluxos e tente novamente.</p><button type="button" class="virgulinha-inline-action" data-virgulinha-page="fluxos">Abrir fluxos →</button>');
+    return;
+  }
+  closePendingVirgulinhaReviews();
+  const steps = fields.steps?.length >= 2 ? fields.steps : ['', ''];
+  const categories = [...new Set([...state.workflows.map(workflow => workflow.category), 'Design', 'Mídia', 'Conteúdo', 'Site', 'Vídeo', 'Branding'].filter(Boolean))];
+  const message = appendVirgulinhaMessage('bot', `
+    <strong>${guided ? 'Vamos criar um fluxo.' : 'Organizei o seu pedido de fluxo.'}</strong>
+    <p>${guided ? 'Monte as etapas do zero ou escolha uma estrutura opcional para ganhar tempo.' : 'Confira o que reconheci e ajuste etapas e responsáveis.'}</p>
+    <form class="virgulinha-review" data-virgulinha-workflow>
+      <div class="virgulinha-form-grid">
+        <label><span><b>1</b> Como o fluxo se chama?</span><input name="name" maxlength="100" required value="${escapeAttr(fields.name || '')}" placeholder="Ex.: Gestão de tráfego"></label>
+        <label><span><b>2</b> Qual é a categoria?</span><input name="category" list="virgulinhaCategories" maxlength="40" required value="${escapeAttr(fields.category || '')}" placeholder="Ex.: Mídia"><datalist id="virgulinhaCategories">${categories.map(category => `<option value="${escapeAttr(category)}">`).join('')}</datalist></label>
+      </div>
+      <label><span><b>3</b> Para que ele será usado? <em>opcional</em></span><input name="description" maxlength="160" placeholder="Ex.: Campanhas recorrentes de mídia paga"></label>
+      <fieldset><legend><b>4</b> Quais são as etapas?</legend><div class="virgulinha-template-picker"><span>Começar com:</span><button type="button" data-virgulinha-template="basic">Estrutura básica</button><button type="button" data-virgulinha-template="content">Conteúdo</button><button type="button" data-virgulinha-template="site">Site</button><small>Opcional — substitui as etapas abaixo.</small></div><div class="virgulinha-step-list">${steps.map(step => virgulinhaStepRow(step)).join('')}</div><button type="button" class="virgulinha-add-step" data-virgulinha-add-step>+ Adicionar etapa</button></fieldset>
+      <div class="virgulinha-command-summary" data-virgulinha-summary></div>
+      <footer><button type="button" class="outline-btn" data-virgulinha-cancel>Cancelar</button><button type="submit" class="primary-btn">Confirmar e criar</button></footer>
+    </form>`, 'review');
+  const form = message.querySelector('form');
+  bindVirgulinhaReview(form);
+  refreshVirgulinhaSteps(form);
+  setTimeout(() => form.elements.namedItem('name').focus(), 50);
+}
+
+function processVirgulinhaCommand(command) {
+  const trimmed = command.trim();
+  if (!trimmed) return;
+  appendVirgulinhaMessage('user', `<p>${escapeHtml(trimmed)}</p>`);
+  const result = analyzeVirgulinhaCommand(trimmed, {
+    clients: state.clients,
+    workflows: state.workflows.filter(workflow => workflow.active !== false),
+    now: new Date()
+  });
+  if (result.intent === 'create_project') return renderVirgulinhaProjectReview(result.fields, false);
+  if (result.intent === 'create_workflow') return renderVirgulinhaWorkflowReview(result.fields, false);
+  appendVirgulinhaMessage('bot', '<strong>Ainda não tenho um atalho para esse pedido.</strong><p>Por enquanto, consigo criar demandas e fluxos. Tente começar com “Crie uma demanda…” ou “Crie um fluxo…”.</p>');
+}
+
+async function createProjectWithVirgulinha(form) {
+  const workflowIds = [...form.querySelectorAll('input[name="workflowIds"]:checked')].map(input => input.value);
+  if (!workflowIds.length) {
+    notify('Escolha um fluxo', 'A demanda precisa gerar pelo menos um entregável.', '!');
+    return null;
+  }
+  const client = clientById(field(form, 'clientId'));
+  const workflows = workflowIds.map(workflowById).filter(workflow => workflow?.active !== false);
+  if (!client || workflows.length !== workflowIds.length) return null;
+  const now = new Date().toISOString();
+  const project = { id: uid('p'), clientId: client.id, client: client.name, name: field(form, 'name').trim(), due: field(form, 'due'), createdAt: now, updatedAt: now };
+  state.projects.unshift(project);
+  workflows.forEach(workflow => {
+    const steps = workflow.steps.map(([name, groupId, sourceStepId], index) => ({ id: uid(`s${index}`), sourceStepId, name, groupId, due: '', tasks: [], note: '' }));
+    steps.at(-1).due = project.due;
+    state.deliverables.unshift({ id: uid('d'), projectId: project.id, workflowId: workflow.id, name: workflow.name, category: workflow.category, color: workflow.color, due: '', status: 'active', stepIndex: 0, createdAt: now, steps, attachments: [], links: [], note: '' });
+  });
+  logActivity('Demanda criada pelo Virgulinha', `${project.name} · ${project.client}`);
+  const saved = await saveState();
+  return saved ? { project, count: workflows.length } : null;
+}
+
+async function createWorkflowWithVirgulinha(form) {
+  const rows = [...form.querySelectorAll('[data-virgulinha-step]')];
+  if (rows.length < 2) return null;
+  const name = field(form, 'name').trim();
+  if (state.workflows.some(item => normalize(item.name) === normalize(name))) {
+    notify('Esse fluxo já existe', 'Abra o fluxo existente ou escolha outro nome.', '!');
+    return null;
+  }
+  const workflow = {
+    id: uid('wf'),
+    name,
+    category: field(form, 'category').trim(),
+    description: field(form, 'description').trim(),
+    color: COLORS[state.workflows.length % COLORS.length],
+    active: true,
+    steps: rows.map(row => [row.querySelector('[name="stepName"]').value.trim(), row.querySelector('[name="stepGroup"]').value, uid('ws')])
+  };
+  state.workflows.push(workflow);
+  logActivity('Fluxo criado pelo Virgulinha', workflow.name);
+  const saved = await saveState();
+  return saved ? workflow : null;
+}
+
+virgulinhaLauncher.onclick = openVirgulinha;
+document.getElementById('virgulinhaClose').onclick = closeVirgulinha;
+virgulinhaOverlay.onclick = closeVirgulinha;
+virgulinhaComposer.onsubmit = event => {
+  event.preventDefault();
+  processVirgulinhaCommand(virgulinhaInput.value);
+  virgulinhaInput.value = '';
+};
+virgulinhaInput.onkeydown = event => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    virgulinhaComposer.requestSubmit();
+  }
+};
+virgulinhaChat.oninput = event => {
+  if (!event.target.matches('[name="stepName"]')) return;
+  const select = event.target.closest('[data-virgulinha-step]').querySelector('[name="stepGroup"]');
+  if (select.dataset.autoGroup !== 'false') select.value = guessVirgulinhaGroupId(event.target.value);
+  virgulinhaReviewSummary(event.target.closest('form'));
+};
+virgulinhaChat.onclick = event => {
+  const start = event.target.closest('[data-virgulinha-start]');
+  if (start) {
+    return start.dataset.virgulinhaStart === 'project'
+      ? renderVirgulinhaProjectReview({}, true)
+      : renderVirgulinhaWorkflowReview({}, true);
+  }
+  const example = event.target.closest('[data-virgulinha-example]');
+  if (example) {
+    virgulinhaInput.value = example.dataset.virgulinhaExample;
+    return virgulinhaComposer.requestSubmit();
+  }
+  const dateShortcut = event.target.closest('[data-virgulinha-date-days]');
+  if (dateShortcut) {
+    const form = dateShortcut.closest('form');
+    form.elements.namedItem('due').value = isoDateFromToday(dateShortcut.dataset.virgulinhaDateDays);
+    virgulinhaReviewSummary(form);
+    return;
+  }
+  const templateButton = event.target.closest('[data-virgulinha-template]');
+  if (templateButton) {
+    const templates = {
+      basic: ['Briefing', 'Planejamento', 'Produção', 'Revisão interna', 'Aprovação do cliente', 'Entrega final'],
+      content: ['Briefing', 'Pauta', 'Criação', 'Revisão interna', 'Aprovação do cliente', 'Publicação'],
+      site: ['Briefing', 'Planejamento', 'Copywriting', 'Design UI', 'Aprovação do cliente', 'Desenvolvimento', 'Revisão', 'Publicação']
+    };
+    const form = templateButton.closest('form');
+    form.querySelector('.virgulinha-step-list').innerHTML = templates[templateButton.dataset.virgulinhaTemplate].map(step => virgulinhaStepRow(step)).join('');
+    form.querySelectorAll('[data-virgulinha-template]').forEach(button => button.classList.toggle('active', button === templateButton));
+    refreshVirgulinhaSteps(form);
+    return;
+  }
+  const cancel = event.target.closest('[data-virgulinha-cancel]');
+  if (cancel) {
+    cancel.closest('.virgulinha-message').remove();
+    return appendVirgulinhaMessage('bot', '<p>Sem problema. O pedido não foi criado.</p>');
+  }
+  const pageButton = event.target.closest('[data-virgulinha-page]');
+  if (pageButton) {
+    closeVirgulinha();
+    return showPage(pageButton.dataset.virgulinhaPage);
+  }
+  const resultButton = event.target.closest('[data-virgulinha-result]');
+  if (resultButton) {
+    closeVirgulinha();
+    showPage(resultButton.dataset.virgulinhaResult);
+    if (resultButton.dataset.projectId) openProjectDetail(projectById(resultButton.dataset.projectId));
+    if (resultButton.dataset.workflowId) openWorkflowModal(resultButton.dataset.workflowId);
+    return;
+  }
+  const addStep = event.target.closest('[data-virgulinha-add-step]');
+  if (addStep) {
+    const form = addStep.closest('form');
+    form.querySelector('.virgulinha-step-list').insertAdjacentHTML('beforeend', virgulinhaStepRow(''));
+    refreshVirgulinhaSteps(form);
+    return form.querySelector('.virgulinha-step-list').lastElementChild.querySelector('input').focus();
+  }
+  const removeStep = event.target.closest('[data-virgulinha-remove-step]');
+  if (removeStep && !removeStep.disabled) {
+    const form = removeStep.closest('form');
+    removeStep.closest('[data-virgulinha-step]').remove();
+    refreshVirgulinhaSteps(form);
+  }
+};
+virgulinhaChat.onsubmit = async event => {
+  const form = event.target.closest('.virgulinha-review');
+  if (!form) return;
+  event.preventDefault();
+  if (!operationReady) return notify('Aguarde um instante', 'A operação ainda está carregando.', '!');
+  if (document.body.classList.contains('viewer-access')) return notify('Acesso somente para leitura', 'Seu perfil não pode criar itens.', '!');
+  if (!form.reportValidity()) return;
+  const isProject = form.matches('[data-virgulinha-project]');
+  if (!isProject && state.workflows.some(item => normalize(item.name) === normalize(field(form, 'name').trim()))) {
+    return notify('Esse fluxo já existe', 'Abra o fluxo existente ou escolha outro nome.', '!');
+  }
+  const button = form.querySelector('[type="submit"]');
+  button.disabled = true;
+  button.textContent = 'Criando…';
+  const result = isProject
+    ? await createProjectWithVirgulinha(form)
+    : await createWorkflowWithVirgulinha(form);
+  if (!result) {
+    button.disabled = false;
+    button.textContent = 'Confirmar e criar';
+    return notify('Não foi possível criar', 'Revise os dados e tente novamente.', '!');
+  }
+  const reviewMessage = form.closest('.virgulinha-message');
+  reviewMessage.classList.add('completed');
+  reviewMessage.innerHTML = `<div class="virgulinha-completed-request"><span>✓</span><div><strong>Pedido confirmado</strong><small>${isProject ? escapeHtml(result.project.name) : escapeHtml(result.name)}</small></div></div>`;
+  if (isProject) {
+    appendVirgulinhaMessage('bot', `<strong>Demanda criada!</strong><p>${escapeHtml(result.project.name)} gerou ${result.count} ${result.count === 1 ? 'entregável' : 'entregáveis'} e já está na operação.</p><button type="button" class="virgulinha-result-action" data-virgulinha-result="demandas" data-project-id="${result.project.id}">Abrir demanda →</button>`, 'success');
+    notify('Demanda criada pelo Virgulinha', result.project.name);
+  } else {
+    appendVirgulinhaMessage('bot', `<strong>Fluxo criado!</strong><p>${escapeHtml(result.name)} está pronto com ${result.steps.length} etapas.</p><button type="button" class="virgulinha-result-action" data-virgulinha-result="fluxos" data-workflow-id="${result.id}">Abrir fluxo →</button>`, 'success');
+    notify('Fluxo criado pelo Virgulinha', result.name);
+  }
+};
+
 function emptyBlock(title, message, icon, action = '') {
   return `<div class="empty-state"><span>${icon}</span><strong>${escapeHtml(title)}</strong><p>${escapeHtml(message)}</p>${action}</div>`;
 }
@@ -2195,6 +2688,17 @@ navItems.forEach(item => item.onclick = () => {
   if (item.dataset.page === 'clientes') selectedClientWorkspaceId = null;
   showPage(item.dataset.page);
 });
+profileSettingsEntry.onclick = event => {
+  if (event.target.closest('#logoutButton')) return;
+  showPage('meus-dados');
+};
+profileSettingsEntry.onkeydown = event => {
+  if (event.target.closest('#logoutButton')) return;
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    showPage('meus-dados');
+  }
+};
 const sidebarToggle = document.getElementById('sidebarToggle');
 function setSidebarCollapsed(collapsed) {
   document.querySelector('.app-shell').classList.toggle('sidebar-collapsed', collapsed);
@@ -2236,6 +2740,7 @@ document.querySelectorAll('[data-flow-view]').forEach(button => button.onclick =
 });
 document.addEventListener('keydown', event => {
   if (event.key !== 'Escape') return;
+  if (virgulinhaAssistant.classList.contains('open')) return closeVirgulinha();
   const preview = document.querySelector('.attachment-preview-layer');
   if (preview) return preview.querySelector('[data-close-preview]').click();
   const confirmation = document.querySelector('.confirm-layer');

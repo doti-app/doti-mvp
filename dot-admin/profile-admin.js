@@ -19,6 +19,10 @@ const emailInput = document.getElementById('profileEmail');
 const roleInput = document.getElementById('profileRole');
 const avatarPicker = document.getElementById('profileAvatarPicker');
 const avatarPreview = document.getElementById('profileAvatarPreview');
+const avatarPreviewWrap = document.getElementById('profileAvatarPreviewWrap');
+const avatarRemoveButton = document.getElementById('profileAvatarRemove');
+const photoInput = document.getElementById('profilePhotoInput');
+const photoLabel = document.getElementById('profilePhotoLabel');
 const saveStatus = document.getElementById('profileSaveStatus');
 const storageHint = document.getElementById('profileStorageHint');
 
@@ -35,8 +39,17 @@ function initials(name) {
     .toUpperCase();
 }
 
+function isCustomPhoto(value) {
+  return /^data:image\/(jpeg|png|webp);base64,/i.test(String(value || ''));
+}
+
 function validAvatar(value) {
-  return AVATARS.includes(String(value || '')) ? String(value) : '';
+  const avatar = String(value || '');
+  if (AVATARS.includes(avatar)) return avatar;
+  if (isCustomPhoto(avatar) && /^[a-z0-9+/=]+$/i.test(avatar.split(',')[1] || '') && avatar.length <= 900000) {
+    return avatar;
+  }
+  return '';
 }
 
 function setAvatar(element, avatarUrl, fullName) {
@@ -44,6 +57,10 @@ function setAvatar(element, avatarUrl, fullName) {
   element.replaceChildren();
   const safeAvatar = validAvatar(avatarUrl);
   element.classList.toggle('has-image', Boolean(safeAvatar));
+  element.classList.toggle('has-custom-photo', isCustomPhoto(safeAvatar));
+  if (element === avatarPreview) {
+    avatarPreviewWrap.classList.toggle('has-image', Boolean(safeAvatar));
+  }
   if (!safeAvatar) {
     element.textContent = initials(fullName);
     return;
@@ -96,11 +113,48 @@ function showToast(title, message) {
   showToast.timer = setTimeout(() => toast.classList.remove('show'), 3200);
 }
 
+function imageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Não foi possível ler a foto selecionada.'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('O arquivo selecionado não é uma imagem válida.'));
+      image.onload = () => resolve(image);
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function preparePhoto(file) {
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    throw new Error('Escolha uma foto JPG, PNG ou WebP.');
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error('A foto deve ter no máximo 5 MB.');
+  }
+
+  const image = await imageFromFile(file);
+  const size = Math.min(image.naturalWidth, image.naturalHeight);
+  const sourceX = (image.naturalWidth - size) / 2;
+  const sourceY = (image.naturalHeight - size) / 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, sourceX, sourceY, size, size, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.84);
+}
+
 function applyProfile(profile) {
   fullNameInput.value = profile.full_name || '';
   emailInput.value = profile.email || authContext?.user?.email || '';
   roleInput.value = ROLE_LABELS[profile.role] || 'Membro';
   selectedAvatar = validAvatar(profile.avatar_url);
+  photoLabel.textContent = isCustomPhoto(selectedAvatar) ? 'Foto selecionada' : 'Nenhuma foto enviada';
 
   setAvatar(avatarPreview, selectedAvatar, profile.full_name);
   setAvatar(document.querySelector('.profile .avatar'), selectedAvatar, profile.full_name);
@@ -140,6 +194,12 @@ function initializeProfile(context) {
     : 'Nome e avatar são salvos com segurança no perfil da sua conta.';
   form.querySelector('[type="submit"]').disabled = false;
   applyProfile(profile);
+
+  photoInput.disabled = !context.localMode;
+  photoInput.closest('.profile-photo-upload')?.classList.toggle('is-disabled', !context.localMode);
+  if (!context.localMode) {
+    photoLabel.textContent = 'Envio de foto disponível no modo local';
+  }
 }
 
 renderAvatarPicker();
@@ -148,6 +208,7 @@ avatarPicker.addEventListener('click', event => {
   const button = event.target.closest('[data-avatar]');
   if (!button) return;
   selectedAvatar = button.dataset.avatar;
+  photoLabel.textContent = 'Nenhuma foto enviada';
   avatarPicker.querySelectorAll('[data-avatar]').forEach(item => {
     const selected = item === button;
     item.classList.toggle('selected', selected);
@@ -155,6 +216,37 @@ avatarPicker.addEventListener('click', event => {
   });
   setAvatar(avatarPreview, selectedAvatar, fullNameInput.value);
   showStatus('');
+});
+
+photoInput.addEventListener('change', async () => {
+  const [file] = photoInput.files;
+  if (!file) return;
+  showStatus('Preparando sua foto...');
+  try {
+    selectedAvatar = await preparePhoto(file);
+    avatarPicker.querySelectorAll('[data-avatar]').forEach(item => {
+      item.classList.remove('selected');
+      item.setAttribute('aria-pressed', 'false');
+    });
+    photoLabel.textContent = file.name;
+    setAvatar(avatarPreview, selectedAvatar, fullNameInput.value);
+    showStatus('Foto pronta. Clique em salvar alterações para confirmar.');
+  } catch (error) {
+    showStatus(error.message || 'Não foi possível usar essa foto.', true);
+  } finally {
+    photoInput.value = '';
+  }
+});
+
+avatarRemoveButton.addEventListener('click', () => {
+  selectedAvatar = '';
+  avatarPicker.querySelectorAll('[data-avatar]').forEach(item => {
+    item.classList.remove('selected');
+    item.setAttribute('aria-pressed', 'false');
+  });
+  photoLabel.textContent = 'Nenhuma foto enviada';
+  setAvatar(avatarPreview, selectedAvatar, fullNameInput.value);
+  showStatus('Imagem removida. Clique em salvar alterações para confirmar.');
 });
 
 fullNameInput.addEventListener('input', () => {
@@ -170,9 +262,8 @@ form.addEventListener('submit', async event => {
     fullNameInput.focus();
     return;
   }
-  if (!selectedAvatar) {
-    showStatus('Escolha um avatar para continuar.', true);
-    avatarPicker.querySelector('[data-avatar]')?.focus();
+  if (!authContext.localMode && isCustomPhoto(selectedAvatar)) {
+    showStatus('O envio de foto ainda está disponível somente no modo local.', true);
     return;
   }
 
@@ -223,7 +314,7 @@ form.addEventListener('submit', async event => {
     showStatus(authContext.localMode
       ? 'Alterações salvas somente neste navegador.'
       : 'Alterações salvas no seu perfil.');
-    showToast('Perfil atualizado', 'Seu nome e avatar foram atualizados.');
+    showToast('Perfil atualizado', 'Seu nome e imagem de perfil foram atualizados.');
     window.dispatchEvent(new CustomEvent('doti:profile-updated', { detail: profile }));
   } catch (error) {
     showStatus(error.message || 'Não foi possível atualizar o perfil.', true);

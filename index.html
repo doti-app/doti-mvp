@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="styles-extra.css">
-  <link rel="stylesheet" href="/functional.css?v=18">
+  <link rel="stylesheet" href="/functional.css?v=40">
   <style>.auth-pending body{visibility:hidden}</style>
   <script src="/assets/vendor/supabase-2.57.4.js"></script>
   <script type="module" src="/dot-admin/auth-guard.js?v=9"></script>
@@ -33,11 +33,10 @@
         <button class="nav-item" data-page="fluxos" data-label="Fluxos" title="Fluxos"><span class="nav-icon">↝</span><span class="nav-label">Fluxos</span><b id="workflowNavCount">0</b></button>
         <button class="nav-item" data-page="clientes" data-label="Clientes" title="Clientes"><span class="nav-icon">◇</span><span class="nav-label">Clientes</span><b id="clientNavCount">0</b></button>
         <button class="nav-item" data-page="equipe" data-label="Equipe e acessos" title="Equipe e acessos" id="teamNavItem"><span class="nav-icon">◎</span><span class="nav-label">Equipe</span><b id="teamNavCount">0</b></button>
-        <button class="nav-item" data-page="meus-dados" data-label="Meus dados" title="Meus dados"><span class="nav-icon">◉</span><span class="nav-label">Meus dados</span></button>
       </nav>
       <div class="sidebar-bottom">
         <div class="storage-note"><i></i><span>Dados salvos neste navegador</span></div>
-        <div class="profile"><div class="avatar">AG</div><div><strong>Sua agência</strong><small>Ambiente interno</small></div><button class="logout-btn" id="logoutButton" type="button" aria-label="Sair da Doti" title="Sair da Doti">↗</button></div>
+        <div class="profile profile-entry" id="profileSettingsEntry" role="button" tabindex="0" aria-label="Abrir meus dados" data-label="Meus dados"><div class="avatar">AG</div><div><strong>Sua agência</strong><small>Ambiente interno</small></div><button class="logout-btn" id="logoutButton" type="button" aria-label="Sair da Doti" title="Sair da Doti">↗</button></div>
       </div>
     </aside>
 
@@ -48,6 +47,11 @@
         <div class="top-actions">
           <button class="outline-btn compact" id="exportData">Exportar backup</button>
           <button class="primary-btn" id="topNewProject">+ Novo projeto</button>
+          <button class="virgulinha-launcher" id="virgulinhaLauncher" type="button" aria-haspopup="dialog" aria-controls="virgulinhaAssistant">
+            <img src="assets/virgulinha.png" alt="" aria-hidden="true">
+            <span><strong>Peça ao Virgulinha</strong><small>Crie demandas e fluxos</small></span>
+            <b aria-hidden="true">→</b>
+          </button>
         </div>
       </header>
 
@@ -188,7 +192,14 @@
 
         <form class="panel profile-settings-card" id="profileSettingsForm">
           <div class="profile-settings-intro">
-            <div class="profile-avatar-preview" id="profileAvatarPreview" aria-hidden="true">DL</div>
+            <div class="profile-avatar-preview-wrap" id="profileAvatarPreviewWrap">
+              <div class="profile-avatar-preview" id="profileAvatarPreview" aria-hidden="true">DL</div>
+              <button class="profile-avatar-remove" id="profileAvatarRemove" type="button" aria-label="Remover imagem do perfil" title="Remover imagem">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"></path>
+                </svg>
+              </button>
+            </div>
             <div>
               <h2>Seu perfil</h2>
               <p>O avatar escolhido aparecerá no seu perfil e, futuramente, nas atividades da operação.</p>
@@ -215,6 +226,17 @@
           <fieldset class="profile-avatar-fieldset">
             <legend>Escolha seu avatar</legend>
             <p>Selecione uma das opções abaixo.</p>
+            <div class="profile-photo-upload">
+              <input id="profilePhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+              <label class="profile-photo-button" for="profilePhotoInput">
+                <span aria-hidden="true">&#8593;</span>
+                Enviar minha foto
+              </label>
+              <div>
+                <strong id="profilePhotoLabel">Nenhuma foto enviada</strong>
+                <small>JPG, PNG ou WebP de at&eacute; 5 MB. A imagem ser&aacute; ajustada automaticamente.</small>
+              </div>
+            </div>
             <div class="profile-avatar-picker" id="profileAvatarPicker"></div>
           </fieldset>
 
@@ -228,11 +250,26 @@
     </main>
   </div>
 
+  <div class="virgulinha-overlay" id="virgulinhaOverlay"></div>
+  <aside class="virgulinha-assistant" id="virgulinhaAssistant" role="dialog" aria-modal="true" aria-labelledby="virgulinhaTitle" aria-hidden="true">
+    <header>
+      <div class="virgulinha-assistant-avatar"><img src="assets/virgulinha.png" alt=""></div>
+      <div><strong id="virgulinhaTitle">Peça ao Virgulinha</strong><span><i></i> Atalhos inteligentes, sem IA</span></div>
+      <button type="button" id="virgulinhaClose" aria-label="Fechar Peça ao Virgulinha">×</button>
+    </header>
+    <div class="virgulinha-chat" id="virgulinhaChat" aria-live="polite"></div>
+    <form class="virgulinha-composer" id="virgulinhaComposer">
+      <label for="virgulinhaInput">Ou descreva o pedido do seu jeito</label>
+      <div><textarea id="virgulinhaInput" rows="2" maxlength="600" placeholder="Ex.: Crie uma demanda Campanha de inverno para a PetYoo..."></textarea><button type="submit" aria-label="Enviar pedido">→</button></div>
+      <small>Dica: inclua nome, cliente, prazo e fluxo. Sempre haverá uma confirmação antes de criar.</small>
+    </form>
+  </aside>
+
   <div class="toast" id="toast" role="status" aria-live="polite">
     <span>✓</span><div><strong></strong><p></p></div>
   </div>
-  <script type="module" src="/app.js?v=13"></script>
-  <script type="module" src="/dot-admin/team-admin.js?v=8"></script>
-  <script type="module" src="/dot-admin/profile-admin.js?v=2"></script>
+  <script type="module" src="/app.js?v=19"></script>
+  <script type="module" src="/dot-admin/team-admin.js?v=11"></script>
+  <script type="module" src="/dot-admin/profile-admin.js?v=4"></script>
 </body>
 </html>
