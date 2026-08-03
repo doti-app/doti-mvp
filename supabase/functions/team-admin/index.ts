@@ -351,21 +351,21 @@ async function revokeInvitation(profile: Profile, body: Record<string, unknown>)
 async function acceptInvitation(request: Request) {
   const user = await authenticatedUser(request);
   const profile = await profileForUser(user.id);
-  const invitationId = String(user.user_metadata?.invitation_id || '');
-  if (!invitationId) return { accepted: true };
+  const email = String(user.email || '').trim().toLowerCase();
+  if (!email) throw new HttpError(400, 'O e-mail da conta autenticada não está disponível.');
 
   const invitations = await adminRequest(
-    `/rest/v1/team_invitations?id=eq.${encodeURIComponent(invitationId)}&agency_id=eq.${encodeURIComponent(profile.agency_id)}&email=ilike.${encodeURIComponent(user.email)}&status=eq.pending&select=id&limit=1`
+    `/rest/v1/team_invitations?agency_id=eq.${encodeURIComponent(profile.agency_id)}&email=ilike.${encodeURIComponent(email)}&status=eq.pending&select=id&order=created_at.desc&limit=1`
   );
-  if (!invitations?.length) {
-    throw new HttpError(409, 'O convite já foi usado, revogado ou expirou.');
-  }
+  const invitationId = String(invitations?.[0]?.id || '');
+  if (!invitationId) return { accepted: true, updated: false };
+
   await adminRequest(`/rest/v1/team_invitations?id=eq.${encodeURIComponent(invitationId)}`, {
     method: 'PATCH',
     headers: { Prefer: 'return=minimal' },
     body: JSON.stringify({ status: 'accepted', accepted_at: new Date().toISOString() })
   });
-  return { accepted: true };
+  return { accepted: true, updated: true };
 }
 
 Deno.serve(async request => {

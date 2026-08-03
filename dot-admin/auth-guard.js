@@ -129,6 +129,15 @@ async function protectPanel() {
       return;
     }
 
+    if (profile.role !== 'owner') {
+      const { error: invitationError } = await supabase.functions.invoke('team-admin', {
+        body: { action: 'accept_invite' }
+      });
+      if (invitationError) {
+        console.warn('Não foi possível finalizar o convite neste acesso.', invitationError);
+      }
+    }
+
     const fullName = profile.full_name;
     const agencyName = profile.agency_name;
     const roleLabels = {
