@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Doti — operação interna para agências de marketing">
   <title>Doti - Operação da agência</title>
+  <link rel="icon" href="/assets/doti.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -33,6 +34,7 @@
         <button class="nav-item" data-page="fluxos" data-label="Fluxos" title="Fluxos"><span class="nav-icon">↝</span><span class="nav-label">Fluxos</span><b id="workflowNavCount">0</b></button>
         <button class="nav-item" data-page="clientes" data-label="Clientes" title="Clientes"><span class="nav-icon">◇</span><span class="nav-label">Clientes</span><b id="clientNavCount">0</b></button>
         <button class="nav-item" data-page="equipe" data-label="Equipe e acessos" title="Equipe e acessos" id="teamNavItem"><span class="nav-icon">◎</span><span class="nav-label">Equipe</span><b id="teamNavCount">0</b></button>
+        <button class="nav-item" data-page="whatsapp" data-label="WhatsApp" title="WhatsApp"><span class="nav-icon">◌</span><span class="nav-label">WhatsApp</span><b id="whatsappNavStatus" aria-hidden="true"></b></button>
       </nav>
       <div class="sidebar-bottom">
         <div class="storage-note"><i></i><span>Dados salvos neste navegador</span></div>
@@ -181,6 +183,209 @@
           </aside>
         </section>
       </div>
+      <div class="page whatsapp-page" id="whatsapp">
+        <section class="page-title whatsapp-page-title">
+          <div>
+            <p class="eyebrow">CANAIS</p>
+            <h1>WhatsApp</h1>
+            <p>Prepare, revise e acompanhe campanhas usando os templates aprovados da sua agência.</p>
+          </div>
+          <div class="whatsapp-title-actions">
+            <button class="outline-btn" id="replaceWhatsappCredentials" type="button" hidden>Substituir credenciais</button>
+            <button class="primary-btn" id="newWhatsappCampaign" type="button" disabled>Nova campanha</button>
+          </div>
+        </section>
+
+        <div class="whatsapp-notice" id="whatsappNotice" role="status" aria-live="polite" hidden></div>
+
+        <section class="whatsapp-campaign-summary" aria-label="Resumo das campanhas">
+          <article><span>RASCUNHOS</span><strong id="whatsappDraftCount">0</strong><small>Aguardando confirmação</small></article>
+          <article><span>PROCESSANDO</span><strong id="whatsappProcessingCount">0</strong><small>Na fila ou em envio</small></article>
+          <article><span>CONCLUÍDAS</span><strong id="whatsappCompletedCount">0</strong><small>Disparos finalizados</small></article>
+          <article><span>COM FALHAS</span><strong id="whatsappFailedCount">0</strong><small>Precisam de atenção</small></article>
+        </section>
+
+        <section class="panel whatsapp-campaign-panel">
+          <div class="panel-head">
+            <div><h2>Campanhas</h2><p>Somente a confirmação final coloca uma campanha na fila de envio.</p></div>
+            <select id="whatsappCampaignFilter" aria-label="Filtrar campanhas">
+              <option value="all">Todas</option>
+              <option value="draft">Rascunhos</option>
+              <option value="processing">Processando</option>
+              <option value="completed">Concluídas</option>
+              <option value="failed">Com falhas</option>
+            </select>
+          </div>
+          <div class="whatsapp-campaign-list" id="whatsappCampaignList" aria-live="polite"></div>
+        </section>
+
+        <section class="panel whatsapp-results-panel" id="whatsappResultsPanel" hidden aria-labelledby="whatsappResultsTitle">
+          <div class="panel-head">
+            <div><p class="eyebrow">ACOMPANHAMENTO</p><h2 id="whatsappResultsTitle">Resultados da campanha</h2><p id="whatsappResultsUpdated">Status atualizado pela Meta.</p></div>
+            <button class="outline-btn" id="closeWhatsappResults" type="button">Fechar</button>
+          </div>
+          <div class="whatsapp-results-metrics" role="region" aria-label="Métricas de entrega">
+            <article><span>PENDENTES</span><strong id="whatsappMetricPending">0</strong></article>
+            <article><span>ACEITOS</span><strong id="whatsappMetricAccepted">0</strong></article>
+            <article><span>ENVIADOS</span><strong id="whatsappMetricSent">0</strong></article>
+            <article><span>ENTREGUES</span><strong id="whatsappMetricDelivered">0</strong></article>
+            <article><span>LIDOS</span><strong id="whatsappMetricRead">0</strong></article>
+            <article><span>FALHOS</span><strong id="whatsappMetricFailed">0</strong></article>
+          </div>
+          <div class="whatsapp-results-toolbar">
+            <label><span>Filtrar destinatários</span><select id="whatsappRecipientStatusFilter">
+              <option value="all">Todos os status</option>
+              <option value="pending">Pendente</option>
+              <option value="accepted">Aceito</option>
+              <option value="sent">Enviado</option>
+              <option value="delivered">Entregue</option>
+              <option value="read">Lido</option>
+              <option value="failed">Falhou</option>
+            </select></label>
+            <button class="outline-btn" id="exportWhatsappResults" type="button">Exportar CSV</button>
+          </div>
+          <div class="whatsapp-results-table-wrap">
+            <table class="whatsapp-results-table">
+              <thead><tr><th>Destinatário</th><th>Status</th><th>Tentativas</th><th>WAMID</th><th>Atualização</th><th>Motivo da falha</th></tr></thead>
+              <tbody id="whatsappResultsBody"></tbody>
+            </table>
+          </div>
+          <p class="whatsapp-results-empty" id="whatsappResultsEmpty" hidden>Nenhum destinatário corresponde a este filtro.</p>
+        </section>
+
+        <div class="whatsapp-settings-heading">
+          <div><p class="eyebrow">INTEGRAÇÃO</p><h2>Conta e templates</h2></div>
+          <p>Conexão segura com a Meta e modelos disponíveis para novas campanhas.</p>
+        </div>
+
+        <section class="whatsapp-connection" id="whatsappConnection" hidden>
+          <article class="panel whatsapp-account-card">
+            <header>
+              <div class="whatsapp-account-mark" aria-hidden="true">◌</div>
+              <div>
+                <span>CONTA CONECTADA</span>
+                <h2 id="whatsappAccountName">—</h2>
+                <p id="whatsappPhoneNumber">—</p>
+              </div>
+              <strong class="whatsapp-status" id="whatsappConnectionStatus">—</strong>
+            </header>
+            <dl class="whatsapp-account-details">
+              <div><dt>WABA ID</dt><dd id="whatsappWabaId">—</dd></div>
+              <div><dt>Phone Number ID</dt><dd id="whatsappPhoneId">—</dd></div>
+              <div><dt>Última validação</dt><dd id="whatsappLastVerified">—</dd></div>
+              <div><dt>Última sincronização</dt><dd id="whatsappLastSynced">—</dd></div>
+            </dl>
+            <footer>
+              <button class="outline-btn" id="testWhatsappConnection" type="button">Testar conexão</button>
+              <button class="primary-btn" id="syncWhatsappTemplates" type="button">Sincronizar novamente</button>
+            </footer>
+          </article>
+
+          <article class="panel whatsapp-template-panel">
+            <div class="panel-head">
+              <div><h2>Templates aprovados</h2><p>Somente modelos aprovados pela Meta podem ser usados em novas campanhas.</p></div>
+              <strong class="whatsapp-template-count" id="whatsappTemplateCount">0</strong>
+            </div>
+            <div class="whatsapp-template-list" id="whatsappTemplateList" aria-live="polite"></div>
+          </article>
+        </section>
+
+        <section class="panel whatsapp-setup-card" id="whatsappSetupCard">
+          <div class="whatsapp-setup-intro">
+            <span>01</span>
+            <div><h2 id="whatsappSetupTitle">Conectar conta da Meta</h2><p>Use um token permanente com acesso ao WABA e aos templates. A DOTI valida tudo antes de salvar.</p></div>
+          </div>
+          <form id="whatsappCredentialsForm" autocomplete="off">
+            <input id="whatsappConnectionId" type="hidden">
+            <label>
+              <span>WABA ID</span>
+              <input id="whatsappWabaInput" name="wabaId" inputmode="numeric" pattern="[0-9]{5,40}" maxlength="40" placeholder="Ex.: 123456789012345" required>
+              <small>Identificador da conta do WhatsApp Business.</small>
+            </label>
+            <label>
+              <span>Phone Number ID</span>
+              <input id="whatsappPhoneInput" name="phoneNumberId" inputmode="numeric" pattern="[0-9]{5,40}" maxlength="40" placeholder="Ex.: 109876543210987" required>
+              <small>Identificador do número vinculado ao WABA.</small>
+            </label>
+            <label class="whatsapp-token-field">
+              <span>Token permanente</span>
+              <input id="whatsappTokenInput" name="accessToken" type="password" minlength="20" maxlength="4096" spellcheck="false" autocomplete="new-password" placeholder="Cole o token gerado na Meta" required>
+              <small>O token é enviado diretamente ao servidor, cifrado e nunca exibido novamente.</small>
+            </label>
+            <div class="whatsapp-form-status" id="whatsappFormStatus" role="status" aria-live="polite"></div>
+            <footer>
+              <button class="outline-btn" id="cancelWhatsappCredentials" type="button" hidden>Cancelar</button>
+              <button class="primary-btn" type="submit">Validar e conectar</button>
+            </footer>
+          </form>
+        </section>
+
+        <div class="whatsapp-campaign-modal" id="whatsappCampaignModal" role="dialog" aria-modal="true" aria-labelledby="whatsappCampaignTitle" hidden>
+          <form id="whatsappCampaignForm" novalidate>
+            <header>
+              <div><p class="eyebrow">NOVA CAMPANHA</p><h2 id="whatsappCampaignTitle">Preparar disparo</h2></div>
+              <button type="button" id="closeWhatsappCampaign" aria-label="Fechar">×</button>
+            </header>
+            <ol class="whatsapp-wizard-steps" aria-label="Etapas da campanha">
+              <li data-wizard-indicator="1"><b>1</b><span>Nome</span></li>
+              <li data-wizard-indicator="2"><b>2</b><span>Template</span></li>
+              <li data-wizard-indicator="3"><b>3</b><span>Destinatários</span></li>
+              <li data-wizard-indicator="4"><b>4</b><span>Variáveis</span></li>
+              <li data-wizard-indicator="5"><b>5</b><span>Revisão</span></li>
+            </ol>
+            <div class="whatsapp-wizard-body">
+              <section class="whatsapp-wizard-pane" data-wizard-step="1">
+                <p class="eyebrow">ETAPA 1 DE 5</p><h3>Como vamos identificar esta campanha?</h3>
+                <label class="whatsapp-field"><span>Nome da campanha</span><input id="whatsappCampaignName" maxlength="160" placeholder="Ex.: Lembrete de reunião — agosto" required><small>Use de 2 a 160 caracteres. Este nome aparece apenas na DOTI.</small></label>
+              </section>
+              <section class="whatsapp-wizard-pane" data-wizard-step="2" hidden>
+                <p class="eyebrow">ETAPA 2 DE 5</p><h3>Selecione um template e seu idioma</h3>
+                <div class="whatsapp-template-picker" id="whatsappTemplatePicker"></div>
+              </section>
+              <section class="whatsapp-wizard-pane" data-wizard-step="3" hidden>
+                <p class="eyebrow">ETAPA 3 DE 5</p><h3>Adicione os destinatários</h3>
+                <div class="whatsapp-source-tabs">
+                  <button type="button" data-recipient-source="csv" class="active">Arquivo CSV</button>
+                  <button type="button" data-recipient-source="paste">Colar números</button>
+                </div>
+                <div id="whatsappCsvSource">
+                  <label class="whatsapp-file-drop" for="whatsappCampaignCsv"><strong>Selecionar arquivo CSV</strong><span id="whatsappCsvFileName">Cabeçalho obrigatório; até 100 contatos válidos.</span></label>
+                  <input id="whatsappCampaignCsv" type="file" accept=".csv,text/csv" hidden>
+                </div>
+                <div id="whatsappPasteSource" hidden>
+                  <label class="whatsapp-field"><span>Um número por linha</span><textarea id="whatsappCampaignPaste" rows="10" placeholder="(11) 99999-9999&#10;+14155552671"></textarea><small>Números brasileiros recebem o DDI 55. Internacionais devem estar completos, iniciando com + ou 00.</small></label>
+                </div>
+                <div class="whatsapp-inline-alert" id="whatsappRecipientHint"></div>
+              </section>
+              <section class="whatsapp-wizard-pane" data-wizard-step="4" hidden>
+                <p class="eyebrow">ETAPA 4 DE 5</p><h3>Mapeie as colunas do CSV</h3>
+                <p class="whatsapp-step-copy" id="whatsappMappingCopy"></p>
+                <div class="whatsapp-mapping-list" id="whatsappMappingList"></div>
+              </section>
+              <section class="whatsapp-wizard-pane" data-wizard-step="5" hidden>
+                <p class="eyebrow">ETAPA 5 DE 5</p><h3>Revise antes de confirmar</h3>
+                <div class="whatsapp-review-counts">
+                  <article><span>SERÃO ENVIADOS</span><strong id="whatsappReviewAccepted">0</strong></article>
+                  <article><span>IGNORADOS</span><strong id="whatsappReviewIgnored">0</strong><small>Duplicados removidos</small></article>
+                  <article><span>REJEITADOS</span><strong id="whatsappReviewRejected">0</strong><small>Inválidos ou incompletos</small></article>
+                </div>
+                <div class="whatsapp-limit-alert" id="whatsappCampaignLimit" hidden></div>
+                <div class="whatsapp-review-grid">
+                  <article><h4>Resumo</h4><dl id="whatsappReviewSummary"></dl><div id="whatsappRejectedDetails"></div></article>
+                  <article class="whatsapp-message-preview"><header><h4>Prévia da mensagem</h4><select id="whatsappPreviewRecipient" aria-label="Destinatário de exemplo"></select></header><p id="whatsappMessagePreview"></p></article>
+                </div>
+                <label class="whatsapp-confirm"><input id="whatsappCampaignConfirmation" type="checkbox"><span>Confirmo o disparo imediato para os destinatários válidos exibidos acima.</span></label>
+                <p class="whatsapp-final-warning">Nenhuma mensagem será enviada antes de clicar em “Confirmar disparo agora”.</p>
+              </section>
+              <div class="whatsapp-wizard-status" id="whatsappWizardStatus" role="status" aria-live="polite"></div>
+            </div>
+            <footer>
+              <button class="outline-btn" id="whatsappWizardBack" type="button" hidden>Voltar</button>
+              <button class="primary-btn" id="whatsappWizardNext" type="button">Continuar</button>
+            </footer>
+          </form>
+        </div>
+      </div>
       <div class="page profile-settings-page" id="meus-dados">
         <section class="page-title">
           <div>
@@ -271,5 +476,6 @@
   <script type="module" src="/app.js?v=19"></script>
   <script type="module" src="/dot-admin/team-admin.js?v=11"></script>
   <script type="module" src="/dot-admin/profile-admin.js?v=4"></script>
+  <script type="module" src="/dot-admin/whatsapp-admin.js?v=2"></script>
 </body>
 </html>
