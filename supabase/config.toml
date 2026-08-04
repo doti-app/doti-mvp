@@ -396,6 +396,10 @@ verify_jwt = true
 [functions.meta-webhook]
 verify_jwt = false
 
+[functions.chatbot-ingest]
+# n8n authenticates with the per-integration secret checked by the function.
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

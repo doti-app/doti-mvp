@@ -21,6 +21,11 @@ const OPERATION_TABLES = [
 let context;
 let filePaths = new Map();
 
+export function registerOperationFilePath(id, path) {
+  if (!id || !path) return;
+  filePaths.set(String(id), String(path));
+}
+
 export async function waitForOperationContext() {
   if (context) return context;
   if (window.dotiAuthContext) {
@@ -171,10 +176,11 @@ export async function uploadOperationFile(id, file) {
   return path;
 }
 
-export async function downloadOperationFile(id) {
+export async function downloadOperationFile(id, knownPath = '') {
   const { supabase, localMode } = await waitForOperationContext();
-  const path = filePaths.get(String(id));
+  const path = filePaths.get(String(id)) || String(knownPath || '');
   if (!path) return null;
+  filePaths.set(String(id), path);
   if (localMode) return readLocalFile(String(id));
   const { data, error } = await supabase.storage.from(FILE_BUCKET).download(path);
   if (error) throw error;
