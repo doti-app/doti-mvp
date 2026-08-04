@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="styles-extra.css">
-  <link rel="stylesheet" href="/functional.css?v=40">
+  <link rel="stylesheet" href="/functional.css?v=41">
   <style>.auth-pending body{visibility:hidden}</style>
   <script src="/assets/vendor/supabase-2.57.4.js"></script>
   <script type="module" src="/dot-admin/auth-guard.js?v=10"></script>
@@ -32,6 +32,7 @@
         <button class="nav-item" data-page="demandas" data-label="Demandas" title="Demandas"><span class="nav-icon">□</span><span class="nav-label">Demandas</span><b id="demandNavCount">0</b></button>
         <button class="nav-item" data-page="fluxos" data-label="Fluxos" title="Fluxos"><span class="nav-icon">↝</span><span class="nav-label">Fluxos</span><b id="workflowNavCount">0</b></button>
         <button class="nav-item" data-page="clientes" data-label="Clientes" title="Clientes"><span class="nav-icon">◇</span><span class="nav-label">Clientes</span><b id="clientNavCount">0</b></button>
+        <button class="nav-item" data-page="curadoria-chatbot" data-label="Curadoria do chatbot" title="Curadoria do chatbot"><span class="nav-icon">✦</span><span class="nav-label">Curadoria</span><b id="curationNavCount">0</b></button>
         <button class="nav-item" data-page="equipe" data-label="Equipe e acessos" title="Equipe e acessos" id="teamNavItem"><span class="nav-icon">◎</span><span class="nav-label">Equipe</span><b id="teamNavCount">0</b></button>
       </nav>
       <div class="sidebar-bottom">
@@ -143,6 +144,43 @@
           <section class="client-grid" id="clientGrid"></section>
         </div>
         <section class="client-workspace" id="clientWorkspace" hidden></section>
+      </div>
+
+      <div class="page curation-page" id="curadoria-chatbot">
+        <section class="page-title curation-page-title">
+          <div>
+            <p class="eyebrow">INTELIGÊNCIA DO ATENDIMENTO</p>
+            <h1>Curadoria do Virgulinha</h1>
+            <p>Revise as conversas reais, identifique ajustes e transforme cada atendimento em melhoria para o chatbot.</p>
+          </div>
+          <button class="primary-btn" id="curationIntegrationButton">+ Conectar n8n</button>
+        </section>
+
+        <section class="curation-overview" id="curationMetrics" aria-label="Resumo da curadoria">
+          <article><span>PENDENTES</span><strong>—</strong><small>aguardando análise</small></article>
+          <article><span>APROVADAS</span><strong>—</strong><small>respostas validadas</small></article>
+          <article><span>PARA AJUSTAR</span><strong>—</strong><small>insumos para o bot</small></article>
+          <article><span>TEMPO MÉDIO</span><strong>—</strong><small>carregando</small></article>
+        </section>
+
+        <section class="panel curation-panel">
+          <div class="panel-head curation-toolbar">
+            <div><h2>Conversas recebidas</h2><p>Os dados enviados pelo n8n aparecem aqui para revisão.</p></div>
+            <div>
+              <label class="mini-search">⌕ <input id="curationSearch" placeholder="Buscar pergunta, resposta ou usuário"></label>
+              <select id="curationStatus" aria-label="Filtrar por decisão">
+                <option value="all">Todas as decisões</option>
+                <option value="pending">Pendentes</option>
+                <option value="approved">Aprovadas</option>
+                <option value="needs_review">Para ajustar</option>
+                <option value="rejected">Descartadas</option>
+              </select>
+            </div>
+          </div>
+          <div class="curation-list" id="curationList" aria-live="polite">
+            <div class="curation-empty">Abra esta área para carregar as conversas.</div>
+          </div>
+        </section>
       </div>
 
       <div class="page team-page" id="equipe">
@@ -271,5 +309,6 @@
   <script type="module" src="/app.js?v=19"></script>
   <script type="module" src="/dot-admin/team-admin.js?v=11"></script>
   <script type="module" src="/dot-admin/profile-admin.js?v=4"></script>
+  <script type="module" src="/dot-admin/chatbot-curation.js?v=1"></script>
 </body>
 </html>
