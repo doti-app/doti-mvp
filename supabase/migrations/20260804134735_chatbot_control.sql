@@ -87,4 +87,3 @@ grant select (bot_id) on public.chatbot_integrations to authenticated;
 grant insert (bot_id) on public.chatbot_integrations to authenticated;
 
 alter table public.chatbots replica identity full;
-

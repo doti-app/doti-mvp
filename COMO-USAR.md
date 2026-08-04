@@ -287,11 +287,11 @@ A identificação de usuários utiliza Supabase Auth:
 - perfil vinculado à agência e papel de proprietário, administrador ou membro;
 - proteção do painel para visitantes sem sessão.
 
-O deploy precisa apenas das variáveis públicas `SUPABASE_URL` e
+O frontend precisa apenas das variáveis públicas `SUPABASE_URL` e
 `SUPABASE_PUBLISHABLE_KEY`. As migrations versionadas em `supabase/migrations`
-configuram autenticação, operação, RLS, Storage e Realtime. A função
-`team-admin` mantém as operações privilegiadas dentro do Supabase, sem chave
-administrativa no Vercel.
+configuram autenticação, operação, integração Meta, RLS, Storage e Realtime.
+As funções `team-admin` e `meta-integration` mantêm as operações privilegiadas
+dentro do Supabase, sem chave administrativa ou token da Meta no Vercel.
 
 Os dados operacionais usam tabelas multiagência no Supabase:
 
@@ -320,10 +320,86 @@ relatados sem gerar referências quebradas.
 - `dot-admin/auth-guard.js`: proteção do painel, identificação do perfil e logout.
 - `dot-admin/supabase-client.js`: cliente compartilhado de autenticação.
 - `dot-admin/operation-store.js`: carregamento, gravação, Realtime, Storage e migração assistida.
+- `dot-admin/whatsapp-admin.js`: configuração da conta, campanhas e consulta dos templates aprovados.
+- `dot-admin/whatsapp-campaign-utils.mjs`: leitura de CSV, normalização, deduplicação e prévia das campanhas.
 - `api/auth-config.js`: entrega segura da configuração pública no ambiente Vercel.
 - `supabase/migrations/`: autenticação, tabelas operacionais, RLS, RPCs, Storage e Realtime.
 - `supabase/functions/team-admin/`: convites e administração privilegiada da equipe.
+- `supabase/functions/meta-integration/`: criptografia de credenciais e ações administrativas da integração Meta.
+- `supabase/functions/meta-webhook/`: verificação pública e recebimento assinado dos eventos de entrega da Meta.
 - `.env.example`: nomes das variáveis exigidas no deploy.
+
+## Segurança da integração Meta
+
+A credencial da Meta é enviada diretamente para a Edge Function autenticada,
+cifrada com AES-GCM e gravada no schema privado. A resposta retorna somente
+metadados da conexão. O token não deve ser salvo em `localStorage`,
+`sessionStorage`, logs, tabelas públicas ou variáveis do frontend.
+
+Antes de publicar `meta-integration`, configure nos secrets das Edge Functions:
+
+- `META_TOKEN_ENCRYPTION_KEY`: chave aleatória de 32 bytes codificada em Base64;
+- `META_TOKEN_ENCRYPTION_KEY_VERSION`: versão numérica da chave, iniciando em `1`.
+- `META_WEBHOOK_VERIFY_TOKEN`: valor aleatório usado somente na verificação inicial do webhook;
+- `META_APP_SECRET`: App Secret do aplicativo Meta, usado para validar `X-Hub-Signature-256`.
+
+Opcionalmente, `META_GRAPH_API_VERSION` pode fixar a versão da Graph API. Sem
+esse secret, a função usa `v24.0`.
+
+Na aba **WhatsApp**, owner e admin informam WABA ID, Phone Number ID e token
+permanente. Antes de persistir, a função confirma na Meta que o número pertence
+ao WABA e consulta somente templates `APPROVED`. Modelos que deixam de aparecer
+como aprovados são mantidos para histórico, mas recebem status `disabled` e não
+ficam disponíveis para novas campanhas.
+
+As chaves padrão do Supabase são fornecidas automaticamente às Edge Functions.
+Não copie `SUPABASE_SECRET_KEYS`, `SUPABASE_SERVICE_ROLE_KEY` ou a chave de
+criptografia para o navegador, Vercel, repositório ou arquivos públicos.
+
+Publique também `meta-webhook` e cadastre na Meta a URL
+`https://<project-ref>.supabase.co/functions/v1/meta-webhook`. A função é
+pública apenas no gateway (`verify_jwt = false`): verificações exigem o token
+configurado e notificações POST sem assinatura HMAC válida são rejeitadas.
+
+Owner e admin podem configurar conexões e colocar campanhas na fila. Member e
+viewer têm leitura limitada à própria agência e não podem configurar nem
+disparar campanhas. Todas as mudanças administrativas registram autor e data.
+
+## Campanhas de WhatsApp
+
+Em **WhatsApp**, owner e admin podem abrir **Nova campanha** e seguir cinco
+etapas: nome, template/idioma, destinatários, variáveis e revisão. Cada campanha
+usa um único template aprovado e só entra na fila após a confirmação explícita
+na última etapa.
+
+Para templates sem variáveis, os contatos podem vir de um CSV ou de uma colagem
+com um número por linha. Templates com variáveis exigem CSV com cabeçalho e uma
+coluna diferente para o telefone e para cada parâmetro obrigatório. Números
+brasileiros recebem o DDI 55; números internacionais devem estar completos e
+começar com `+` ou `00`.
+
+Antes da revisão, duplicados são removidos e linhas inválidas ou incompletas são
+separadas. A tela mostra os totais enviados, ignorados e rejeitados e permite
+alternar a prévia entre destinatários de exemplo. Mais de 100 contatos válidos
+bloqueiam a confirmação; divida o arquivo em campanhas menores.
+
+Depois da confirmação, a Edge Function continua o processamento em segundo
+plano, em lotes de 10. Cada destinatário é reivindicado atomicamente e cada
+tentativa registra horário, resultado e código de erro. Falhas de rede, limite
+ou servidor recebem até três tentativas, com espera progressiva; números ou
+templates rejeitados de forma permanente não são repetidos.
+
+Use **Ver resultados** na lista de campanhas para consultar pendentes, aceitos,
+enviados, entregues, lidos e falhos. A tabela mostra o `wamid`, o número de
+tentativas e o motivo da falha, permite filtrar por status e exportar o recorte
+visível em CSV. Atualizações repetidas ou atrasadas da Meta ficam no histórico
+sem duplicar contadores nem regredir o status atual.
+
+A funcionalidade permanece bloqueada por padrão e é liberada por agência. O
+piloto aceita somente hashes de números internos autorizados; a liberação geral
+remove essa allowlist apenas depois da validação operacional. O procedimento de
+conexão, CSV, testes, monitoramento, substituição de token e rollout está em
+[`docs/whatsapp-rollout-runbook.md`](docs/whatsapp-rollout-runbook.md).
 
 ## Primeiro uso recomendado
 

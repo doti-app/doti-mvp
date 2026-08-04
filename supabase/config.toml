@@ -390,6 +390,12 @@ deno_version = 2
 [functions.team-admin]
 verify_jwt = true
 
+[functions.meta-integration]
+verify_jwt = true
+
+[functions.meta-webhook]
+verify_jwt = false
+
 [functions.chatbot-ingest]
 # n8n authenticates with the per-integration secret checked by the function.
 verify_jwt = false
