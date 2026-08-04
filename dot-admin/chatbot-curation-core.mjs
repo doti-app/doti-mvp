@@ -98,7 +98,14 @@ export function buildReviewPatch({ status, rating, categories, notes }, reviewer
 export function generateIntegrationCredentials() {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
   const token = [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
-  return { sourceKey: `virgulinha_${token.slice(0, 16)}`, secret: `doti_wh_${token}` };
+  return { sourceKey: `doti_bot_${token.slice(0, 16)}`, secret: `doti_wh_${token}` };
+}
+
+export function selectBotInteractions(rows, integrations, botId) {
+  const integrationIds = new Set(
+    integrations.filter(integration => integration.bot_id === botId).map(integration => integration.id)
+  );
+  return rows.filter(row => integrationIds.has(row.integration_id));
 }
 
 export async function sha256(value) {
