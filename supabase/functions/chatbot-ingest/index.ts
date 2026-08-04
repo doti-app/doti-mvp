@@ -108,6 +108,10 @@ Deno.serve(async request => {
     answer,
     channel: text(payload.channel ?? payload.canal, 40) || "web",
     external_user_id: nullableText(payload.user_id ?? payload.id_usuario, 200),
+    external_session_id: nullableText(
+      payload.session_id ?? payload.id_atendimento ?? payload.attendance_id,
+      200
+    ),
     source_url: nullableText(payload.url ?? payload.endereco_url, 2048),
     response_time_ms: responseTimeMs,
     raw_payload: payload

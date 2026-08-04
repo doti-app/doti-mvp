@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="styles-extra.css">
-  <link rel="stylesheet" href="/functional.css?v=41">
+  <link rel="stylesheet" href="/functional.css?v=42">
   <style>.auth-pending body{visibility:hidden}</style>
   <script src="/assets/vendor/supabase-2.57.4.js"></script>
   <script type="module" src="/dot-admin/auth-guard.js?v=10"></script>
@@ -163,7 +163,12 @@
           <article><span>TEMPO MÉDIO</span><strong>—</strong><small>carregando</small></article>
         </section>
 
-        <section class="panel curation-panel">
+        <div class="curation-view-tabs" role="tablist" aria-label="Visualização da curadoria">
+          <button class="active" type="button" role="tab" aria-selected="true" data-curation-view="queue">Fila de revisão</button>
+          <button type="button" role="tab" aria-selected="false" data-curation-view="history">Histórico por dia</button>
+        </div>
+
+        <section class="panel curation-panel" id="curationQueuePanel">
           <div class="panel-head curation-toolbar">
             <div><h2>Conversas recebidas</h2><p>Os dados enviados pelo n8n aparecem aqui para revisão.</p></div>
             <div>
@@ -179,6 +184,18 @@
           </div>
           <div class="curation-list" id="curationList" aria-live="polite">
             <div class="curation-empty">Abra esta área para carregar as conversas.</div>
+          </div>
+        </section>
+
+        <section class="panel curation-history-panel" id="curationHistoryPanel" hidden>
+          <div class="panel-head">
+            <div><h2>Logs de conversa</h2><p>Resumo diário das mensagens, usuários e sessões recebidas pelo Virgulinha.</p></div>
+          </div>
+          <div class="curation-log-head" aria-hidden="true">
+            <span>DATA</span><span>MENSAGENS</span><span>USUÁRIOS E SESSÕES</span><span></span>
+          </div>
+          <div class="curation-log-list" id="curationLogList" aria-live="polite">
+            <div class="curation-empty">Carregando histórico…</div>
           </div>
         </section>
       </div>
@@ -309,6 +326,6 @@
   <script type="module" src="/app.js?v=19"></script>
   <script type="module" src="/dot-admin/team-admin.js?v=11"></script>
   <script type="module" src="/dot-admin/profile-admin.js?v=4"></script>
-  <script type="module" src="/dot-admin/chatbot-curation.js?v=1"></script>
+  <script type="module" src="/dot-admin/chatbot-curation.js?v=2"></script>
 </body>
 </html>

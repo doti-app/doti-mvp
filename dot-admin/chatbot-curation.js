@@ -3,12 +3,13 @@ import {
   buildReviewPatch,
   filterInteractions,
   generateIntegrationCredentials,
+  groupInteractionsByDay,
   normalizeInteraction,
   sha256,
   summarizeInteractions
 } from './chatbot-curation-core.mjs';
 
-const LOCAL_KEY = 'doti-chatbot-curation-local-v1';
+const LOCAL_KEY = 'doti-chatbot-curation-local-v2';
 const statusLabels = {
   pending: 'Pendente',
   approved: 'Aprovada',
@@ -21,6 +22,10 @@ const metrics = document.getElementById('curationMetrics');
 const search = document.getElementById('curationSearch');
 const statusFilter = document.getElementById('curationStatus');
 const integrationButton = document.getElementById('curationIntegrationButton');
+const queuePanel = document.getElementById('curationQueuePanel');
+const historyPanel = document.getElementById('curationHistoryPanel');
+const historyList = document.getElementById('curationLogList');
+const viewButtons = [...document.querySelectorAll('[data-curation-view]')];
 let context;
 let interactions = [];
 let integration = null;
@@ -38,17 +43,17 @@ function localSeed() {
     {
       id: 'local-chat-1', occurred_at: new Date(now - 18 * 60000).toISOString(),
       question: 'Conhece a Crysthian da Vírgula?', answer: 'Eu sou o Virgulinha, assistente virtual da Agência Vírgula. Posso apresentar nossos serviços e ajudar com o primeiro atendimento.',
-      channel: 'web', external_user_id: 'user_demo_01', source_url: 'https://www.agenciavirgula.com.br', response_time_ms: 3609, status: 'pending', categories: []
+      channel: 'web', external_user_id: 'user_demo_01', external_session_id: 'session_demo_01', source_url: 'https://www.agenciavirgula.com.br', response_time_ms: 3609, status: 'pending', categories: []
     },
     {
       id: 'local-chat-2', occurred_at: new Date(now - 52 * 60000).toISOString(),
       question: 'Estou triste hoje, Virgulinha', answer: 'Poxa, sinto muito que esteja assim. Se quiser, podemos conversar brevemente e depois pensar em como a comunicação da sua marca pode ficar mais leve.',
-      channel: 'web', external_user_id: 'user_demo_02', source_url: 'https://www.agenciavirgula.com.br', response_time_ms: 2808, status: 'needs_review', rating: 3, categories: ['tom de voz'], review_notes: 'Resposta empática, mas deve evitar desviar para uma oferta comercial.'
+      channel: 'web', external_user_id: 'user_demo_02', external_session_id: 'session_demo_02', source_url: 'https://www.agenciavirgula.com.br', response_time_ms: 2808, status: 'needs_review', rating: 3, categories: ['tom de voz'], review_notes: 'Resposta empática, mas deve evitar desviar para uma oferta comercial.'
     },
     {
-      id: 'local-chat-3', occurred_at: new Date(now - 95 * 60000).toISOString(),
+      id: 'local-chat-3', occurred_at: new Date(now - 26 * 60 * 60000).toISOString(),
       question: 'Você sabe sobre a Copa do Mundo?', answer: 'Sei um pouco, mas meu foco é ajudar com marketing, posicionamento e os serviços da Agência Vírgula.',
-      channel: 'web', external_user_id: 'user_demo_03', source_url: 'https://www.agenciavirgula.com.br', response_time_ms: 2957, status: 'approved', rating: 4, categories: ['fora de escopo'], review_notes: 'Boa contenção de escopo.'
+      channel: 'web', external_user_id: 'user_demo_03', external_session_id: 'session_demo_03', source_url: 'https://www.agenciavirgula.com.br', response_time_ms: 2957, status: 'approved', rating: 4, categories: ['fora de escopo'], review_notes: 'Boa contenção de escopo.'
     }
   ].map(normalizeInteraction);
 }
@@ -94,6 +99,7 @@ function render() {
     <article><span>TEMPO MÉDIO</span><strong>${summary.average_ms == null ? '—' : `${(summary.average_ms / 1000).toFixed(1)}s`}</strong><small>${summary.total} interações</small></article>`;
   document.getElementById('curationNavCount').textContent = summary.pending;
   integrationButton.textContent = integration ? 'Configurar conexão' : '+ Conectar n8n';
+  renderHistory();
   const filtered = filterInteractions(interactions, { status: statusFilter.value, search: search.value });
   if (!filtered.length) {
     list.innerHTML = '<div class="curation-empty"><span>✓</span><strong>Nenhuma conversa encontrada</strong><p>A fila está em dia ou os filtros não encontraram resultados.</p></div>';
@@ -116,6 +122,49 @@ function render() {
     </article>`).join('');
 }
 
+function safeHttpUrl(value) {
+  try {
+    const url = new URL(String(value || ''));
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function dateFromDayKey(key) {
+  return new Date(`${key}T12:00:00-03:00`);
+}
+
+function formatDayLabel(key) {
+  const date = dateFromDayKey(key);
+  const dateLabel = new Intl.DateTimeFormat('pt-BR').format(date);
+  const weekday = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(date);
+  return `<strong>${dateLabel}</strong><small>${escapeHtml(weekday)}</small>`;
+}
+
+function capitalizeFirst(value) {
+  const text = String(value || '');
+  return text ? `${text[0].toLocaleUpperCase('pt-BR')}${text.slice(1)}` : '';
+}
+
+function renderHistory() {
+  const groups = groupInteractionsByDay(interactions);
+  if (!groups.length) {
+    historyList.innerHTML = '<div class="curation-empty"><span>○</span><strong>Nenhum log recebido</strong><p>As conversas aparecerão aqui assim que o n8n enviar a primeira interação.</p></div>';
+    return;
+  }
+  historyList.innerHTML = groups.map(group => `
+    <article class="curation-log-row" data-log-day="${group.key}">
+      <div class="curation-log-date">${formatDayLabel(group.key)}</div>
+      <div><strong>${group.message_count}</strong><span>${group.message_count === 1 ? 'mensagem' : 'mensagens'}</span></div>
+      <div class="curation-log-audience">
+        <span><strong>${group.user_count}</strong> ${group.user_count === 1 ? 'usuário' : 'usuários'}</span>
+        <span><strong>${group.session_count}</strong> ${group.session_count === 1 ? 'sessão' : 'sessões'}</span>
+      </div>
+      <button class="outline-btn" type="button" data-view-log>Visualizar <span>→</span></button>
+    </article>`).join('');
+}
+
 function showModal(content, className = '') {
   const layer = document.createElement('div');
   layer.className = `doti-modal curation-modal ${className}`;
@@ -125,6 +174,34 @@ function showModal(content, className = '') {
     if (event.target === layer || event.target.closest('[data-close-modal]')) layer.remove();
   });
   return layer;
+}
+
+function openDayLog(dayKey) {
+  const group = groupInteractionsByDay(interactions).find(item => item.key === dayKey);
+  if (!group) return;
+  const modal = showModal(`<div class="curation-log-modal-card">
+    <header>
+      <div><p class="eyebrow">LOG DE CONVERSA</p><h2>${escapeHtml(capitalizeFirst(new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full' }).format(dateFromDayKey(group.key))))}</h2><span>${group.message_count} mensagens · ${group.user_count} usuários · ${group.session_count} sessões</span></div>
+      <button type="button" data-close-modal>×</button>
+    </header>
+    <div class="curation-log-detail-list">
+      ${group.interactions.map((row, index) => `
+        <article class="curation-log-detail">
+          <div class="curation-log-detail-number"><span>${String(index + 1).padStart(2, '0')}</span><time>${new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(row.occurred_at))}</time></div>
+          <div class="curation-log-message"><b>PERGUNTA</b><p>${escapeHtml(row.question)}</p></div>
+          <div class="curation-log-message answer"><b>RESPOSTA DO VIRGULINHA</b><p>${escapeHtml(row.answer)}</p></div>
+          <dl>
+            <div><dt>Canal</dt><dd>${escapeHtml(row.channel)}</dd></div>
+            <div><dt>Usuário</dt><dd>${escapeHtml(row.external_user_id || 'Não informado')}</dd></div>
+            <div><dt>Sessão</dt><dd>${escapeHtml(row.external_session_id || 'Não informada')}</dd></div>
+            <div><dt>Tempo</dt><dd>${row.response_time_ms == null ? '—' : `${(row.response_time_ms / 1000).toFixed(1)}s`}</dd></div>
+            ${safeHttpUrl(row.source_url) ? `<div class="wide"><dt>Endereço</dt><dd><a href="${escapeHtml(safeHttpUrl(row.source_url))}" target="_blank" rel="noreferrer">${escapeHtml(row.source_url)}</a></dd></div>` : ''}
+          </dl>
+        </article>`).join('')}
+    </div>
+    <footer><button type="button" class="outline-btn" data-close-modal>Fechar</button></footer>
+  </div>`, 'curation-log-modal');
+  return modal;
 }
 
 function openReview(id) {
@@ -184,6 +261,7 @@ function integrationSnippet() {
     answer: "={{ $json.resposta }}",
     channel: "={{ $json.canal || 'web' }}",
     user_id: "={{ $json.id_usuario }}",
+    session_id: "={{ $json.id_atendimento || $json.session_id }}",
     url: "={{ $json.url }}",
     response_time_ms: "={{ $json.tempo_resposta_ms || Math.round(Number(String($json.tempo_resposta || 0).replace(',', '.')) * 1000) }}"
   }, null, 2);
@@ -265,6 +343,20 @@ list.addEventListener('click', event => {
   const button = event.target.closest('[data-review]');
   if (button) openReview(button.closest('[data-curation-id]').dataset.curationId);
 });
+historyList.addEventListener('click', event => {
+  const button = event.target.closest('[data-view-log]');
+  if (button) openDayLog(button.closest('[data-log-day]').dataset.logDay);
+});
+viewButtons.forEach(button => button.addEventListener('click', () => {
+  const history = button.dataset.curationView === 'history';
+  queuePanel.hidden = history;
+  historyPanel.hidden = !history;
+  viewButtons.forEach(item => {
+    const active = item === button;
+    item.classList.toggle('active', active);
+    item.setAttribute('aria-selected', String(active));
+  });
+}));
 document.querySelector('[data-page="curadoria-chatbot"]')?.addEventListener('click', initialize);
 window.addEventListener('doti:auth-ready', initialize, { once: true });
 if (window.dotiAuthContext) initialize();

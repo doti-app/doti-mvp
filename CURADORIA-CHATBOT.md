@@ -40,12 +40,13 @@ Body sugerido:
   "answer": "={{ $json.resposta }}",
   "channel": "={{ $json.canal || 'web' }}",
   "user_id": "={{ $json.id_usuario }}",
+  "session_id": "={{ $json.id_atendimento || $json.session_id }}",
   "url": "={{ $json.url }}",
   "response_time_ms": "={{ $json.tempo_resposta_ms || Math.round(Number(String($json.tempo_resposta || 0).replace(',', '.')) * 1000) }}"
 }
 ```
 
-Se os nomes de saída do AI Agent forem diferentes, ajuste somente as expressões à direita. `event_id`, `question` e `answer` são obrigatórios.
+Se os nomes de saída do AI Agent forem diferentes, ajuste somente as expressões à direita. `event_id`, `question` e `answer` são obrigatórios. `session_id` deve receber o identificador do atendimento/sessão para que o histórico diário contabilize sessões sem misturar usuários recorrentes.
 
 ## Desenvolvimento local
 

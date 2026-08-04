@@ -7,6 +7,7 @@ import {
   buildReviewPatch,
   filterInteractions,
   generateIntegrationCredentials,
+  groupInteractionsByDay,
   normalizeInteraction,
   sha256,
   summarizeInteractions
@@ -31,6 +32,22 @@ test('resume fila e calcula tempo médio', () => {
     { status: 'needs_review', response_time_ms: null }
   ]);
   assert.deepEqual(summary, { total: 3, pending: 1, approved: 1, needs_review: 1, rejected: 0, average_ms: 3000 });
+});
+
+test('agrupa logs por dia, usuários e sessões', () => {
+  const rows = [
+    normalizeInteraction({ id: '1', occurred_at: '2026-08-04T13:00:00Z', question: 'A', answer: 'B', external_user_id: 'u1', external_session_id: 's1' }),
+    normalizeInteraction({ id: '2', occurred_at: '2026-08-04T14:00:00Z', question: 'C', answer: 'D', external_user_id: 'u1', external_session_id: 's1' }),
+    normalizeInteraction({ id: '3', occurred_at: '2026-08-04T15:00:00Z', question: 'E', answer: 'F', external_user_id: 'u2', external_session_id: 's2' }),
+    normalizeInteraction({ id: '4', occurred_at: '2026-08-03T15:00:00Z', question: 'G', answer: 'H', external_user_id: 'u3', external_session_id: 's3' })
+  ];
+  const groups = groupInteractionsByDay(rows);
+  assert.equal(groups.length, 2);
+  assert.deepEqual(
+    { key: groups[0].key, messages: groups[0].message_count, users: groups[0].user_count, sessions: groups[0].session_count },
+    { key: '2026-08-04', messages: 3, users: 2, sessions: 2 }
+  );
+  assert.equal(groups[0].interactions[0].id, '3');
 });
 
 test('monta atualização de curadoria vinculada ao revisor', () => {
@@ -60,4 +77,11 @@ test('migração protege as tabelas e concede acesso explícito', () => {
   assert.match(migration, /grant select .*chatbot_integrations to authenticated/is);
   assert.match(migration, /unique \(integration_id, external_event_id\)/i);
   assert.doesNotMatch(migration, /grant all .* to authenticated/i);
+});
+
+test('migração de logs adiciona sessão sem ampliar privilégios', () => {
+  const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20260804141434_chatbot_conversation_logs.sql'), 'utf8');
+  assert.match(migration, /add column external_session_id text/i);
+  assert.match(migration, /chatbot_interactions_agency_session_idx/i);
+  assert.doesNotMatch(migration, /grant\s/i);
 });
