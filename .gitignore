@@ -5,3 +5,4 @@ node_modules
 avatars-*.zip
 avatars-hd-sem-borda/
 assets/avatars-users/preview-*.png
+.env*
