@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="styles-extra.css">
-  <link rel="stylesheet" href="/functional.css?v=45">
+  <link rel="stylesheet" href="/functional.css?v=56">
   <style>.auth-pending body{visibility:hidden}</style>
   <script src="/assets/vendor/supabase-2.57.4.js"></script>
   <script type="module" src="/dot-admin/auth-guard.js?v=10"></script>
@@ -170,7 +170,7 @@
           </button>
           <section class="page-title curation-page-title">
             <div>
-              <h1 id="curationBotTitle">Curadoria - Bot</h1>
+              <h1 id="curationBotTitle">Painel de Controle Doti - Bot</h1>
               <p>Revise as conversas reais, identifique ajustes e transforme cada atendimento em melhoria para este bot.</p>
             </div>
             <div class="curation-page-actions">
@@ -183,9 +183,9 @@
           </section>
 
           <section class="curation-overview" id="curationMetrics" aria-label="Resumo da curadoria">
-            <article><span>PENDENTES</span><strong>—</strong><small>aguardando análise</small></article>
-            <article><span>APROVADAS</span><strong>—</strong><small>respostas validadas</small></article>
-            <article><span>PARA AJUSTAR</span><strong>—</strong><small>insumos para o bot</small></article>
+            <article><span>ATENDIMENTOS</span><strong>—</strong><small>conversas realizadas</small></article>
+            <article><span>USUÁRIOS</span><strong>—</strong><small>pessoas atendidas</small></article>
+            <article><span>INTERAÇÕES</span><strong>—</strong><small>mensagens processadas</small></article>
             <article><span>TEMPO MÉDIO</span><strong>—</strong><small>carregando</small></article>
           </section>
 
@@ -198,6 +198,11 @@
             <div class="panel-head curation-toolbar">
               <div><h2>Conversas recebidas</h2><p>Somente as conversas do bot selecionado aparecem aqui.</p></div>
               <div>
+                <div class="curation-date-filters curation-queue-date-filters" aria-label="Filtrar fila por período">
+                  <label><span>De</span><input type="date" id="curationQueueDateFrom" aria-label="Data inicial da fila de revisão"></label>
+                  <label><span>Até</span><input type="date" id="curationQueueDateTo" aria-label="Data final da fila de revisão"></label>
+                  <button class="outline-btn" id="clearCurationQueueDates" type="button" disabled>Limpar</button>
+                </div>
                 <label class="mini-search">⌕ <input id="curationSearch" placeholder="Buscar pergunta, resposta ou usuário"></label>
                 <select id="curationStatus" aria-label="Filtrar por decisão">
                   <option value="all">Todas as decisões</option>
@@ -216,6 +221,11 @@
           <section class="panel curation-history-panel" id="curationHistoryPanel" hidden>
             <div class="panel-head">
               <div><h2>Logs de conversa</h2><p>Resumo diário das mensagens, usuários e sessões recebidas por este bot.</p></div>
+              <div class="curation-date-filters curation-history-filters" aria-label="Filtrar logs por período">
+                <label><span>De</span><input type="date" id="curationHistoryDateFrom" aria-label="Data inicial dos logs"></label>
+                <label><span>Até</span><input type="date" id="curationHistoryDateTo" aria-label="Data final dos logs"></label>
+                <button class="outline-btn" id="clearCurationHistoryDates" type="button" disabled>Limpar</button>
+              </div>
             </div>
             <div class="curation-log-head" aria-hidden="true">
               <span>DATA</span><span>MENSAGENS</span><span>USUÁRIOS E SESSÕES</span><span></span>
@@ -557,6 +567,6 @@
   <script type="module" src="/dot-admin/team-admin.js?v=11"></script>
   <script type="module" src="/dot-admin/profile-admin.js?v=4"></script>
   <script type="module" src="/dot-admin/whatsapp-admin.js?v=2"></script>
-  <script type="module" src="/dot-admin/chatbot-curation.js?v=8"></script>
+  <script type="module" src="/dot-admin/chatbot-curation.js?v=15"></script>
 </body>
 </html>

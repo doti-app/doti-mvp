@@ -8,14 +8,17 @@ import {
 } from './operation-store.js?v=6';
 import {
   buildReviewPatch,
+  filterDayGroupsByDate,
   filterInteractions,
+  filterInteractionsByDate,
   generateIntegrationCredentials,
   groupInteractionsByDay,
   normalizeInteraction,
   selectBotInteractions,
   sha256,
-  summarizeInteractions
-} from './chatbot-curation-core.mjs?v=3';
+  summarizeInteractions,
+  summarizePanelMetrics
+} from './chatbot-curation-core.mjs?v=6';
 
 const LOCAL_KEY = 'doti-chatbot-curation-local-v2';
 const LEGACY_LOCAL_KEY = 'doti-chatbot-curation-local-v1';
@@ -36,12 +39,18 @@ const list = document.getElementById('curationList');
 const metrics = document.getElementById('curationMetrics');
 const search = document.getElementById('curationSearch');
 const statusFilter = document.getElementById('curationStatus');
+const queueDateFrom = document.getElementById('curationQueueDateFrom');
+const queueDateTo = document.getElementById('curationQueueDateTo');
+const clearQueueDatesButton = document.getElementById('clearCurationQueueDates');
 const integrationButton = document.getElementById('curationIntegrationButton');
 const toggleBotStatusButton = document.getElementById('toggleBotStatusButton');
 const removeBotButton = document.getElementById('removeBotButton');
 const queuePanel = document.getElementById('curationQueuePanel');
 const historyPanel = document.getElementById('curationHistoryPanel');
 const historyList = document.getElementById('curationLogList');
+const historyDateFrom = document.getElementById('curationHistoryDateFrom');
+const historyDateTo = document.getElementById('curationHistoryDateTo');
+const clearHistoryDatesButton = document.getElementById('clearCurationHistoryDates');
 const viewButtons = [...document.querySelectorAll('[data-curation-view]')];
 let context;
 let bots = [];
@@ -212,17 +221,21 @@ function renderDirectory() {
     const summary = summarizeInteractions(botInteractions);
     const connected = integrationsForBot(bot.id).some(item => item.is_active);
     const latest = botInteractions[0]?.occurred_at;
+    const canEdit = ['owner', 'admin'].includes(context.profile.role);
     return `
-      <button class="bot-card" type="button" data-open-bot="${escapeHtml(bot.id)}" style="--bot-color:${escapeHtml(bot.color || '#ffd400')}">
-        <span class="bot-avatar"><span>${escapeHtml(initials(bot.name))}</span>${bot.avatar_path ? `<img data-bot-avatar="${escapeHtml(bot.id)}" alt="" hidden>` : ''}</span>
-        <span class="bot-card-copy">
-          <strong>${escapeHtml(bot.name)}</strong>
-          <small>${escapeHtml(clientName(bot))}</small>
-          <span class="bot-connection ${connected && bot.is_active ? 'active' : 'inactive'}">${!bot.is_active ? 'Desativado' : connected ? 'Ativo' : 'Sem conexão ativa'}</span>
-        </span>
-        <span class="bot-card-summary"><b>${summary.pending}</b><small>pendentes</small>${latest ? `<time>${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(new Date(latest))}</time>` : '<time>Sem conversas</time>'}</span>
-        <span class="bot-card-arrow">→</span>
-      </button>`;
+      <article class="bot-card-shell" style="--bot-color:${escapeHtml(bot.color || '#ffd400')}">
+        <button class="bot-card" type="button" data-open-bot="${escapeHtml(bot.id)}" aria-label="Abrir curadoria de ${escapeHtml(bot.name)}">
+          <span class="bot-avatar"><span>${escapeHtml(initials(bot.name))}</span>${bot.avatar_path ? `<img data-bot-avatar="${escapeHtml(bot.id)}" alt="" hidden>` : ''}</span>
+          <span class="bot-card-copy">
+            <strong>${escapeHtml(bot.name)}</strong>
+            <small>${escapeHtml(clientName(bot))}</small>
+            <span class="bot-connection ${connected && bot.is_active ? 'active' : 'inactive'}">${!bot.is_active ? 'Desativado' : connected ? 'Ativo' : 'Sem conexão ativa'}</span>
+          </span>
+          <span class="bot-card-summary"><b>${summary.pending}</b><small>pendentes</small>${latest ? `<time>${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(new Date(latest))}</time>` : '<time>Sem conversas</time>'}</span>
+          <span class="bot-card-arrow">→</span>
+        </button>
+        ${canEdit ? `<button class="bot-card-edit" type="button" data-edit-bot="${escapeHtml(bot.id)}" aria-label="Editar ${escapeHtml(bot.name)}" title="Editar bot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l11-11a2.8 2.8 0 0 0-4-4L4 16v4Zm9.5-13.5 4 4"></path></svg></button>` : ''}
+      </article>`;
   }).join('');
   hydrateBotAvatars(botGrid);
 }
@@ -234,27 +247,34 @@ function renderCuration() {
   if (!bot) return;
   const botInteractions = interactionsForBot(bot.id);
   const integration = integrationsForBot(bot.id)[0] || null;
-  const summary = summarizeInteractions(botInteractions);
-  document.getElementById('curationBotTitle').textContent = `Curadoria - ${bot.name}`;
+  const panelSummary = summarizePanelMetrics(botInteractions);
+  document.getElementById('curationBotTitle').textContent = `Painel de Controle Doti - ${bot.name}`;
   toggleBotStatusButton.textContent = bot.is_active ? 'Desativar bot' : 'Reativar bot';
   toggleBotStatusButton.classList.toggle('is-inactive', !bot.is_active);
   metrics.innerHTML = `
-    <article><span>PENDENTES</span><strong>${summary.pending}</strong><small>aguardando análise</small></article>
-    <article><span>APROVADAS</span><strong>${summary.approved}</strong><small>respostas validadas</small></article>
-    <article><span>PARA AJUSTAR</span><strong>${summary.needs_review}</strong><small>insumos para o bot</small></article>
-    <article><span>TEMPO MÉDIO</span><strong>${summary.average_ms == null ? '—' : `${(summary.average_ms / 1000).toFixed(1)}s`}</strong><small>${summary.total} ${summary.total === 1 ? 'interação' : 'interações'}</small></article>`;
+    <article><span>ATENDIMENTOS</span><strong>${panelSummary.attendances}</strong><small>conversas realizadas</small></article>
+    <article><span>USUÁRIOS</span><strong>${panelSummary.users}</strong><small>pessoas atendidas</small></article>
+    <article><span>INTERAÇÕES</span><strong>${panelSummary.interactions}</strong><small>mensagens processadas</small></article>
+    <article><span>TEMPO MÉDIO</span><strong>${panelSummary.average_ms == null ? '—' : `${(panelSummary.average_ms / 1000).toFixed(1)}s`}</strong><small>por resposta</small></article>`;
   integrationButton.textContent = integration ? 'Configurar conexão' : '+ Conectar n8n';
   renderHistory(botInteractions);
-  const filtered = filterInteractions(botInteractions, { status: statusFilter.value, search: search.value });
+  const queueFrom = queueDateFrom.value;
+  const queueTo = queueDateTo.value;
+  queueDateFrom.max = queueTo;
+  queueDateTo.min = queueFrom;
+  clearQueueDatesButton.disabled = !queueFrom && !queueTo;
+  const filteredByContent = filterInteractions(botInteractions, { status: statusFilter.value, search: search.value });
+  const filtered = filterInteractionsByDate(filteredByContent, { from: queueFrom, to: queueTo });
   if (!filtered.length) {
-    list.innerHTML = `<div class="curation-empty"><span>✓</span><strong>Nenhuma conversa encontrada</strong><p>${integration ? 'A fila está em dia ou os filtros não encontraram resultados.' : 'Configure a conexão deste bot para começar a receber conversas.'}</p></div>`;
+    const dateFiltered = Boolean(queueFrom || queueTo);
+    list.innerHTML = `<div class="curation-empty"><span>✓</span><strong>${dateFiltered ? 'Nenhuma conversa neste período' : 'Nenhuma conversa encontrada'}</strong><p>${dateFiltered ? 'Ajuste as datas ou limpe o período para visualizar toda a fila.' : integration ? 'A fila está em dia ou os filtros não encontraram resultados.' : 'Configure a conexão deste bot para começar a receber conversas.'}</p></div>`;
     return;
   }
   list.innerHTML = filtered.map(row => `
     <article class="curation-card" data-curation-id="${escapeHtml(row.id)}">
       <header>
-        <div><span class="curation-status ${row.status}">${statusLabels[row.status]}</span><time>${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(row.occurred_at))}</time></div>
-        <div class="curation-meta"><span>${escapeHtml(row.channel)}</span>${row.response_time_ms == null ? '' : `<span>${(row.response_time_ms / 1000).toFixed(1)}s</span>`}${row.external_user_id ? `<span>${escapeHtml(row.external_user_id)}</span>` : ''}</div>
+        <div class="curation-card-state"><span class="curation-status ${row.status}">${statusLabels[row.status]}</span><time><small>Recebida em</small>${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(row.occurred_at))}</time></div>
+        <div class="curation-meta"><span><small>Canal</small><strong>${escapeHtml(row.channel)}</strong></span>${row.response_time_ms == null ? '' : `<span><small>Tempo</small><strong>${(row.response_time_ms / 1000).toFixed(1)}s</strong></span>`}${row.external_user_id ? `<span><small>Usuário</small><strong>${escapeHtml(row.external_user_id)}</strong></span>` : ''}</div>
       </header>
       <div class="curation-dialogue">
         <div><b>PERGUNTA</b><p>${escapeHtml(row.question)}</p></div>
@@ -305,11 +325,21 @@ function capitalizeFirst(value) {
 
 function renderHistory(rows) {
   const groups = groupInteractionsByDay(rows);
+  const from = historyDateFrom.value;
+  const to = historyDateTo.value;
+  const filteredGroups = filterDayGroupsByDate(groups, { from, to });
+  historyDateFrom.max = to;
+  historyDateTo.min = from;
+  clearHistoryDatesButton.disabled = !from && !to;
   if (!groups.length) {
     historyList.innerHTML = '<div class="curation-empty"><span>○</span><strong>Nenhum log recebido</strong><p>As conversas aparecerão aqui assim que a conexão enviar a primeira interação.</p></div>';
     return;
   }
-  historyList.innerHTML = groups.map(group => `
+  if (!filteredGroups.length) {
+    historyList.innerHTML = '<div class="curation-empty"><span>⌕</span><strong>Nenhum log neste período</strong><p>Ajuste as datas ou limpe o filtro para visualizar todo o histórico.</p></div>';
+    return;
+  }
+  historyList.innerHTML = filteredGroups.map(group => `
     <article class="curation-log-row" data-log-day="${group.key}">
       <div class="curation-log-date">${formatDayLabel(group.key)}</div>
       <div><strong>${group.message_count}</strong><span>${group.message_count === 1 ? 'mensagem' : 'mensagens'}</span></div>
@@ -332,9 +362,9 @@ function openDayLog(dayKey) {
       <button type="button" data-close-modal>×</button>
     </header>
     <div class="curation-log-detail-list">
-      ${group.interactions.map((row, index) => `
+      ${group.interactions.map(row => `
         <article class="curation-log-detail">
-          <div class="curation-log-detail-number"><span>${String(index + 1).padStart(2, '0')}</span><time>${new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(row.occurred_at))}</time></div>
+          <div class="curation-log-detail-time"><small>Horário</small><time>${new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(row.occurred_at))}</time></div>
           <div class="curation-log-message"><b>PERGUNTA</b><p>${escapeHtml(row.question)}</p></div>
           <div class="curation-log-message answer"><b>RESPOSTA DE ${escapeHtml(bot.name.toLocaleUpperCase('pt-BR'))}</b><p>${escapeHtml(row.answer)}</p></div>
           <dl>
@@ -461,6 +491,108 @@ function openNewBot() {
         try { await context.supabase.from('chatbots').delete().eq('id', bot.id); } catch (_) {}
       }
       status.textContent = error.message || 'Não foi possível criar o bot.';
+      button.disabled = false;
+    }
+  };
+}
+
+function openEditBot(botId) {
+  if (!['owner', 'admin'].includes(context.profile.role)) return;
+  const bot = bots.find(item => item.id === botId);
+  if (!bot) return;
+  const clientOptions = [...clients]
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+    .map(client => `<option value="${escapeHtml(client.id)}" ${client.id === bot.client_id ? 'selected' : ''}>${escapeHtml(client.name)}</option>`)
+    .join('');
+  const modal = showModal(`<form>
+    <header><div><p class="eyebrow">CONTROLE DE BOTS</p><h2>Editar bot</h2></div><button type="button" data-close-modal>×</button></header>
+    <p class="curation-integration-intro">Atualize a identificação do bot. A conexão e as conversas existentes serão preservadas.</p>
+    <div class="client-brand-editor bot-brand-editor">
+      <div class="client-logo-preview" data-bot-avatar-preview style="--client-color:${escapeHtml(bot.color || '#ffd400')}"><span>${escapeHtml(initials(bot.name))}</span>${bot.avatar_path ? `<img data-bot-avatar="${escapeHtml(bot.id)}" alt="" hidden>` : ''}</div>
+      <label class="client-logo-upload">Trocar imagem<input type="file" name="avatar" accept="image/png,image/jpeg,image/webp"><small>PNG, JPG ou WebP · até 10 MB</small></label>
+      ${bot.avatar_path ? '<label class="bot-avatar-remove"><input type="checkbox" name="remove_avatar"> Remover imagem atual</label>' : ''}
+    </div>
+    <div class="curation-review-grid">
+      <label><span>Nome do bot</span><input name="name" required minlength="2" maxlength="80" value="${escapeHtml(bot.name)}"></label>
+      <label><span>Cliente</span><select name="client_id"><option value="" ${bot.client_id ? '' : 'selected'}>Bot interno da agência</option>${clientOptions}</select></label>
+    </div>
+    <fieldset class="client-color-picker bot-color-picker"><legend>Cor de identificação</legend>${BOT_COLORS.map(color => `<label title="${color}"><input type="radio" name="color" value="${color}" ${color === bot.color ? 'checked' : ''}><span style="--swatch:${color}"></span></label>`).join('')}</fieldset>
+    <div class="curation-modal-status" role="alert"></div>
+    <footer><button type="button" class="outline-btn" data-close-modal>Cancelar</button><button type="submit" class="primary-btn">Salvar alterações</button></footer>
+  </form>`);
+  const form = modal.querySelector('form');
+  const preview = form.querySelector('[data-bot-avatar-preview]');
+  const nameInput = form.elements.namedItem('name');
+  const avatarInput = form.elements.namedItem('avatar');
+  const removeAvatarInput = form.elements.namedItem('remove_avatar');
+  hydrateBotAvatars(modal);
+  nameInput.addEventListener('input', () => {
+    preview.querySelector('span').textContent = initials(nameInput.value || 'Bot');
+  });
+  form.querySelectorAll('input[name="color"]').forEach(input => input.addEventListener('change', () => {
+    preview.style.setProperty('--client-color', input.value);
+  }));
+  avatarInput.addEventListener('change', event => {
+    const file = event.target.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    if (removeAvatarInput) removeAvatarInput.checked = false;
+    const image = preview.querySelector('img') || preview.appendChild(document.createElement('img'));
+    const url = URL.createObjectURL(file);
+    image.src = url;
+    image.hidden = false;
+    preview.querySelector('span').hidden = true;
+    image.onload = () => URL.revokeObjectURL(url);
+  });
+  removeAvatarInput?.addEventListener('change', () => {
+    const image = preview.querySelector('img');
+    if (removeAvatarInput.checked) {
+      avatarInput.value = '';
+      if (image) image.hidden = true;
+      preview.querySelector('span').hidden = false;
+    } else if (image?.src) {
+      image.hidden = false;
+      preview.querySelector('span').hidden = true;
+    }
+  });
+  form.onsubmit = async event => {
+    event.preventDefault();
+    const button = form.querySelector('[type="submit"]');
+    const status = form.querySelector('.curation-modal-status');
+    const data = new FormData(form);
+    const name = String(data.get('name') || '').trim();
+    const avatarFile = avatarInput.files[0];
+    const removeAvatar = Boolean(data.get('remove_avatar'));
+    if (bots.some(item => item.id !== bot.id && item.name.toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'))) {
+      status.textContent = 'Já existe um bot com esse nome.';
+      return;
+    }
+    if (avatarFile && (!avatarFile.type.startsWith('image/') || avatarFile.size > 10 * 1024 * 1024)) {
+      status.textContent = 'Escolha uma imagem PNG, JPG ou WebP de até 10 MB.';
+      return;
+    }
+    button.disabled = true;
+    try {
+      let avatarPath = bot.avatar_path || null;
+      if (avatarFile) avatarPath = await uploadOperationFile(bot.id, avatarFile);
+      const patch = {
+        client_id: data.get('client_id') || null,
+        name,
+        color: data.get('color') || '#ffd400',
+        avatar_path: removeAvatar ? null : avatarPath
+      };
+      if (context.localMode) {
+        Object.assign(bot, patch, { updated_at: new Date().toISOString() });
+        writeLocal();
+      } else {
+        const result = await context.supabase.from('chatbots').update(patch).eq('id', bot.id).select('id, agency_id, client_id, name, color, avatar_path, is_active, created_by, created_at, updated_at').single();
+        if (result.error) throw result.error;
+        Object.assign(bot, result.data);
+      }
+      if (removeAvatar && !avatarFile) await removeOperationFile(bot.id);
+      modal.remove();
+      render();
+    } catch (error) {
+      status.textContent = error.message || 'Não foi possível salvar as alterações.';
       button.disabled = false;
     }
   };
@@ -687,6 +819,13 @@ async function initialize() {
 
 search.addEventListener('input', renderCuration);
 statusFilter.addEventListener('change', renderCuration);
+queueDateFrom.addEventListener('change', renderCuration);
+queueDateTo.addEventListener('change', renderCuration);
+clearQueueDatesButton.addEventListener('click', () => {
+  queueDateFrom.value = '';
+  queueDateTo.value = '';
+  renderCuration();
+});
 integrationButton.addEventListener('click', openIntegration);
 toggleBotStatusButton.addEventListener('click', toggleSelectedBotStatus);
 removeBotButton.addEventListener('click', openRemoveBot);
@@ -696,11 +835,20 @@ backButton.addEventListener('click', () => {
   render();
 });
 botGrid.addEventListener('click', event => {
+  const editButton = event.target.closest('[data-edit-bot]');
+  if (editButton) {
+    openEditBot(editButton.dataset.editBot);
+    return;
+  }
   const button = event.target.closest('[data-open-bot]');
   if (!button) return;
   selectedBotId = button.dataset.openBot;
   search.value = '';
   statusFilter.value = 'all';
+  queueDateFrom.value = '';
+  queueDateTo.value = '';
+  historyDateFrom.value = '';
+  historyDateTo.value = '';
   setCurationView('queue');
   render();
 });
@@ -715,6 +863,13 @@ historyList.addEventListener('click', event => {
 viewButtons.forEach(button => button.addEventListener('click', () => {
   setCurationView(button.dataset.curationView);
 }));
+historyDateFrom.addEventListener('change', renderCuration);
+historyDateTo.addEventListener('change', renderCuration);
+clearHistoryDatesButton.addEventListener('click', () => {
+  historyDateFrom.value = '';
+  historyDateTo.value = '';
+  renderCuration();
+});
 document.querySelector('[data-page="curadoria-chatbot"]')?.addEventListener('click', () => {
   if (initialized) {
     selectedBotId = null;

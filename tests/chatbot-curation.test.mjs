@@ -5,13 +5,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   buildReviewPatch,
+  filterDayGroupsByDate,
   filterInteractions,
+  filterInteractionsByDate,
   generateIntegrationCredentials,
   groupInteractionsByDay,
   normalizeInteraction,
   selectBotInteractions,
   sha256,
-  summarizeInteractions
+  summarizeInteractions,
+  summarizePanelMetrics
 } from '../dot-admin/chatbot-curation-core.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -49,6 +52,39 @@ test('agrupa o histórico do bot por dia, usuários e sessões', () => {
     { key: '2026-08-04', messages: 3, users: 2, sessions: 2 }
   );
   assert.equal(groups[0].interactions[0].id, '3');
+});
+
+test('resume atendimentos usuarios interacoes e tempo medio do painel', () => {
+  const summary = summarizePanelMetrics([
+    { id: '1', external_session_id: 's1', external_user_id: 'u1', response_time_ms: 2000 },
+    { id: '2', external_session_id: 's1', external_user_id: 'u1', response_time_ms: 4000 },
+    { id: '3', external_session_id: 's2', external_user_id: 'u2', response_time_ms: null },
+    { id: '4', external_user_id: 'u3', response_time_ms: 3000 }
+  ]);
+  assert.deepEqual(summary, { attendances: 3, users: 3, interactions: 4, average_ms: 3000 });
+});
+
+test('filtra os grupos de logs por intervalo inclusivo de datas', () => {
+  const groups = [
+    { key: '2026-08-05' },
+    { key: '2026-08-04' },
+    { key: '2026-08-03' }
+  ];
+  assert.deepEqual(filterDayGroupsByDate(groups, { from: '2026-08-04', to: '2026-08-05' }).map(group => group.key), ['2026-08-05', '2026-08-04']);
+  assert.deepEqual(filterDayGroupsByDate(groups, { from: '2026-08-05' }).map(group => group.key), ['2026-08-05']);
+  assert.equal(filterDayGroupsByDate(groups, { to: '2026-08-02' }).length, 0);
+});
+
+test('filtra a fila de revisao pelo dia local da conversa', () => {
+  const rows = [
+    { id: '1', occurred_at: '2026-08-04T02:30:00Z' },
+    { id: '2', occurred_at: '2026-08-04T13:00:00Z' },
+    { id: '3', occurred_at: '2026-08-05T13:00:00Z' }
+  ];
+  assert.deepEqual(
+    filterInteractionsByDate(rows, { from: '2026-08-04', to: '2026-08-04' }).map(row => row.id),
+    ['2']
+  );
 });
 
 test('separa conversas pela conexão do bot selecionado', () => {
@@ -125,4 +161,33 @@ test('novo bot aceita paleta de cores e imagem privada', () => {
   assert.match(interfaceCode, /uploadOperationFile\(bot\.id, avatarFile\)/);
   assert.match(interfaceCode, /downloadOperationFile\(image\.dataset\.botAvatar, bot\?\.avatar_path\)/);
   assert.match(interfaceCode, /avatarFile\.size > 10 \* 1024 \* 1024/);
+});
+
+test('bots existentes podem ser editados sem perder conexoes e conversas', () => {
+  const interfaceCode = fs.readFileSync(path.join(root, 'dot-admin/chatbot-curation.js'), 'utf8');
+  assert.match(interfaceCode, /data-edit-bot=/);
+  assert.match(interfaceCode, /function openEditBot\(botId\)/);
+  assert.match(interfaceCode, /\.from\('chatbots'\)\.update\(patch\)\.eq\('id', bot\.id\)/);
+  assert.match(interfaceCode, /Salvar altera/);
+  assert.match(interfaceCode, /removeOperationFile\(bot\.id\)/);
+});
+
+test('painel do bot exibe o titulo com o nome selecionado', () => {
+  const interfaceCode = fs.readFileSync(path.join(root, 'dot-admin/chatbot-curation.js'), 'utf8');
+  assert.match(interfaceCode, /Painel de Controle Doti - \$\{bot\.name\}/);
+});
+
+test('fila de revisao identifica os metadados de cada conversa', () => {
+  const interfaceCode = fs.readFileSync(path.join(root, 'dot-admin/chatbot-curation.js'), 'utf8');
+  assert.match(interfaceCode, /<small>Recebida em<\/small>/);
+  assert.match(interfaceCode, /<small>Canal<\/small>/);
+  assert.match(interfaceCode, /<small>Tempo<\/small>/);
+  assert.match(interfaceCode, /<small>Usuário<\/small>/);
+});
+
+test('detalhe do log exibe horario sem numeracao amarela', () => {
+  const interfaceCode = fs.readFileSync(path.join(root, 'dot-admin/chatbot-curation.js'), 'utf8');
+  assert.match(interfaceCode, /curation-log-detail-time/);
+  assert.match(interfaceCode, /<small>Horário<\/small>/);
+  assert.doesNotMatch(interfaceCode, /String\(index \+ 1\)\.padStart/);
 });
