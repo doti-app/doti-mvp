@@ -370,6 +370,16 @@ function isOverdue(project, deliverable) {
   return Boolean(overdueDeadline(project, deliverable));
 }
 
+function dashboardMetricIcon(name) {
+  const icons = {
+    projects: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5h6l2-2h9v13h-17z"></path></svg>',
+    active: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16l5-5 4 4 7-8"></path><path d="M15 7h5v5"></path></svg>',
+    deliverables: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 20 8l-8 4.5L4 8z"></path><path d="m4 12 8 4.5 8-4.5M4 16l8 4.5 8-4.5"></path></svg>',
+    approval: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7v5h4"></path></svg>'
+  };
+  return icons[name] || '';
+}
+
 function renderDashboard() {
   const today = new Date();
   document.getElementById('todayLabel').textContent = today.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).toUpperCase();
@@ -384,9 +394,9 @@ function renderDashboard() {
     ? `${active.length} ${active.length === 1 ? 'entregável está em andamento' : 'entregáveis estão em andamento'}.`
     : 'Nenhuma demanda cadastrada. Crie seu primeiro projeto para começar.';
   document.getElementById('dashboardMetrics').innerHTML = [
-    ['□', state.projects.length, 'Projetos', 'yellow'],
-    ['↝', active.length, 'Em andamento', 'blue'],
-    ['◷', approvals.length, 'Em aprovação', 'violet'],
+    [dashboardMetricIcon('projects'), state.projects.length, 'Projetos', 'yellow'],
+    [dashboardMetricIcon('active'), active.length, 'Em andamento', 'blue'],
+    [dashboardMetricIcon('approval'), approvals.length, 'Em aprovação', 'violet'],
     ['✓', completed.length, 'Concluídos', 'green']
   ].map(([icon, value, label, color]) => `<article><span class="metric-icon ${color}">${icon}</span><div><small>${label}</small><strong>${value}</strong><em>${metricHint(label, value)}</em></div></article>`).join('');
 
@@ -713,9 +723,11 @@ function renderDemands() {
   const counts = { planning: 0, production: 0, approval: 0, done: 0 };
   state.deliverables.forEach(item => counts[macroStatus(item)]++);
   document.getElementById('operationSummary').innerHTML = [
-    [state.projects.length, 'projetos'], [state.deliverables.length, 'entregáveis'],
-    [counts.approval, 'em aprovação'], [counts.done, 'concluídos']
-  ].map(([value, label], index) => `<article><span class="summary-icon ${['yellow-bg', 'blue-bg', 'violet-bg', 'mint-bg'][index]}">${['□', '◇', '◷', '✓'][index]}</span><div><strong>${value}</strong><small>${label}</small></div></article>`).join('');
+    [state.projects.length, 'projetos', dashboardMetricIcon('projects')],
+    [state.deliverables.length, 'entregáveis', dashboardMetricIcon('deliverables')],
+    [counts.approval, 'em aprovação', dashboardMetricIcon('approval')],
+    [counts.done, 'concluídos', '✓']
+  ].map(([value, label, icon], index) => `<article><span class="summary-icon ${['yellow-bg', 'blue-bg', 'violet-bg', 'mint-bg'][index]}">${icon}</span><div><strong>${value}</strong><small>${label}</small></div></article>`).join('');
 
   const search = normalize(document.getElementById('demandSearch').value);
   const filter = document.getElementById('statusFilter').value;
