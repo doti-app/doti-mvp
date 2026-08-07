@@ -1,4 +1,9 @@
-import { authUrl, getAuthConfig, getSupabase } from './supabase-client.js';
+import { authUrl, getAuthConfig, getSupabase } from '../shared/auth/supabase-client.js';
+
+/** @param {{ document?: Document, location?: Location }} [options] */
+export function createLoginPage(options = {}) {
+const document = options.document || globalThis.document;
+const location = options.location || globalThis.location;
 
 const form = document.getElementById('loginForm');
 const emailInput = document.getElementById('loginEmail');
@@ -278,4 +283,5 @@ async function initialize() {
   }
 }
 
-initialize();
+return { mount: initialize };
+}

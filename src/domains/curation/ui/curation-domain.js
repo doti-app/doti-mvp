@@ -5,7 +5,7 @@ import {
   removeOperationFile,
   uploadOperationFile,
   waitForOperationContext
-} from './operation-store.js?v=6';
+} from '../../operation/infrastructure/agency-store.js';
 import {
   buildReviewPatch,
   filterDayGroupsByDate,
@@ -18,7 +18,11 @@ import {
   sha256,
   summarizeInteractions,
   summarizePanelMetrics
-} from './chatbot-curation-core.mjs?v=6';
+} from '../domain/curation-core.mjs';
+
+/** @param {{ auth: any, document?: Document }} dependencies */
+export function createCurationDomain({ auth, document: documentRef = globalThis.document }) {
+const document = documentRef;
 
 const LOCAL_KEY = 'doti-chatbot-curation-local-v2';
 const LEGACY_LOCAL_KEY = 'doti-chatbot-curation-local-v1';
@@ -84,6 +88,7 @@ function localSeed() {
     { id: 'local-integration-virgulinha', bot_id: virgulinhaBot.id, name: 'Virgulinha Web', source_key: 'virgulinha_demo', is_active: true },
     { id: 'local-integration-camilinha', bot_id: camilinhaBot.id, name: 'Camilinha Web', source_key: 'camilinha_demo', is_active: true }
   ];
+  /** @type {any[]} */
   const seededInteractions = [
     {
       id: 'local-chat-1', integration_id: seededIntegrations[0].id, occurred_at: new Date(now - 18 * 60000).toISOString(),
@@ -142,6 +147,7 @@ function registerBotAvatarPaths() {
   });
 }
 
+/** @param {ParentNode} [root] */
 async function hydrateBotAvatars(root = document) {
   const images = [...root.querySelectorAll('img[data-bot-avatar]')];
   await Promise.all(images.map(async image => {
@@ -878,7 +884,16 @@ document.querySelector('[data-page="curadoria-chatbot"]')?.addEventListener('cli
     initialize();
   }
 });
-window.addEventListener('doti:auth-ready', initialize, { once: true });
-if (window.dotiAuthContext) initialize();
-
-export { initialize };
+let mounted = false;
+return {
+  id: 'curation',
+  async mount() {
+    if (mounted) return;
+    mounted = true;
+    await initialize();
+  },
+  unmount() {
+    mounted = false;
+  }
+};
+}

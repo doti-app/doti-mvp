@@ -1,3 +1,7 @@
+/** @param {{ auth: any, events?: EventTarget, document?: Document }} dependencies */
+export function createProfileDomain({ auth, events = new EventTarget(), document: documentRef = globalThis.document }) {
+const document = documentRef;
+
 const LOCAL_PROFILE_KEY = 'doti-local-profile-v1';
 const LOCAL_TEAM_KEY = 'doti-local-team-v1';
 const AVATAR_BASE = '/assets/avatars-users';
@@ -102,6 +106,7 @@ function showStatus(message, attention = false) {
   saveStatus.classList.toggle('error', attention);
 }
 
+let toastTimer;
 function showToast(title, message) {
   const toast = document.getElementById('toast');
   if (!toast) return;
@@ -109,8 +114,8 @@ function showToast(title, message) {
   toast.querySelector('strong').textContent = title;
   toast.querySelector('p').textContent = message;
   toast.classList.add('show');
-  clearTimeout(showToast.timer);
-  showToast.timer = setTimeout(() => toast.classList.remove('show'), 3200);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
 }
 
 function imageFromFile(file) {
@@ -121,7 +126,7 @@ function imageFromFile(file) {
       const image = new Image();
       image.onerror = () => reject(new Error('O arquivo selecionado não é uma imagem válida.'));
       image.onload = () => resolve(image);
-      image.src = reader.result;
+      image.src = String(reader.result || '');
     };
     reader.readAsDataURL(file);
   });
@@ -186,7 +191,6 @@ function initializeProfile(context) {
     : { ...context.profile, avatar_url: validAvatar(context.profile.avatar_url) };
 
   context.profile = profile;
-  window.dotiAuthContext.profile = profile;
   if (context.localMode) syncLocalTeam(profile);
 
   storageHint.textContent = context.localMode
@@ -309,13 +313,12 @@ form.addEventListener('submit', async event => {
     if (authContext.user?.user_metadata) {
       authContext.user.user_metadata.full_name = profile.full_name;
     }
-    window.dotiAuthContext.profile = profile;
     applyProfile(profile);
     showStatus(authContext.localMode
       ? 'Alterações salvas somente neste navegador.'
       : 'Alterações salvas no seu perfil.');
     showToast('Perfil atualizado', 'Seu nome e imagem de perfil foram atualizados.');
-    window.dispatchEvent(new CustomEvent('doti:profile-updated', { detail: profile }));
+    events.dispatchEvent(new CustomEvent('profile-updated', { detail: profile }));
   } catch (error) {
     showStatus(error.message || 'Não foi possível atualizar o perfil.', true);
   } finally {
@@ -324,8 +327,16 @@ form.addEventListener('submit', async event => {
   }
 });
 
-window.addEventListener('doti:auth-ready', event => initializeProfile(event.detail));
-
-if (window.dotiAuthContext) {
-  initializeProfile(window.dotiAuthContext);
+let mounted = false;
+return {
+  id: 'profile',
+  mount() {
+    if (mounted) return;
+    mounted = true;
+    initializeProfile(auth);
+  },
+  unmount() {
+    mounted = false;
+  }
+};
 }

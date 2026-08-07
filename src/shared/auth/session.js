@@ -1,5 +1,8 @@
 import { getAuthConfig, getSupabase } from './supabase-client.js';
 
+let authContext = null;
+let stopSubscription = () => {};
+
 function startLocalMode() {
   const profile = {
     id: 'local-owner',
@@ -36,7 +39,7 @@ function startLocalMode() {
 
   document.body.dataset.userRole = profile.role;
   document.body.dataset.localMode = 'true';
-  window.dotiAuthContext = {
+  authContext = {
     localMode: true,
     supabase: null,
     session,
@@ -49,9 +52,7 @@ function startLocalMode() {
   });
 
   document.documentElement.classList.remove('auth-pending');
-  window.dispatchEvent(new CustomEvent('doti:auth-ready', {
-    detail: window.dotiAuthContext
-  }));
+  return authContext;
 }
 
 function validAvatar(value) {
@@ -85,8 +86,7 @@ async function protectPanel() {
   try {
     const config = await getAuthConfig();
     if (config.localMode) {
-      startLocalMode();
-      return;
+      return startLocalMode();
     }
     const supabase = await getSupabase();
     const { data: { session }, error } = await supabase.auth.getSession();
@@ -155,26 +155,42 @@ async function protectPanel() {
     }
 
     document.body.dataset.userRole = profile.role;
-    window.dotiAuthContext = { supabase, session, user, profile };
+    authContext = { supabase, session, user, profile };
 
     document.getElementById('logoutButton')?.addEventListener('click', async () => {
       await supabase.auth.signOut();
       location.replace('/dot-admin/');
     });
 
-    supabase.auth.onAuthStateChange((event, nextSession) => {
-      if (nextSession && window.dotiAuthContext) {
-        window.dotiAuthContext.session = nextSession;
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (nextSession && authContext) {
+        authContext.session = nextSession;
       }
       if (event === 'SIGNED_OUT') location.replace('/dot-admin/');
     });
+    stopSubscription = () => data.subscription.unsubscribe();
     document.documentElement.classList.remove('auth-pending');
-    window.dispatchEvent(new CustomEvent('doti:auth-ready', {
-      detail: window.dotiAuthContext
-    }));
+    return authContext;
   } catch (_) {
     location.replace('/dot-admin/?error=config');
+    return null;
   }
 }
 
-protectPanel();
+/**
+ * Resolves the panel session once and exposes it to the composition root.
+ * No feature reads authentication through `window` or lifecycle events.
+ */
+export function createProtectedSession() {
+  return {
+    start: protectPanel,
+    stop() {
+      stopSubscription();
+      stopSubscription = () => {};
+      authContext = null;
+    },
+    get context() {
+      return authContext;
+    }
+  };
+}

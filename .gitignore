@@ -2,6 +2,8 @@
 .env.local
 .vercel
 node_modules
+test-results/
+playwright-report/
 avatars-*.zip
 avatars-hd-sem-borda/
 assets/avatars-users/preview-*.png

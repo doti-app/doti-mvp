@@ -4,6 +4,7 @@ const path = require('path');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 3000);
+const HOST = process.env.HOST || '127.0.0.1';
 
 loadLocalEnv();
 
@@ -160,7 +161,7 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log('');
   console.log(`Doti local: http://localhost:${PORT}`);
   console.log('Pressione Ctrl+C para encerrar.');

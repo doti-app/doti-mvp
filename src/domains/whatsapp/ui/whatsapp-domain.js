@@ -6,7 +6,11 @@ import {
   renderTemplatePreview,
   requiredTemplateParams,
   templateBody
-} from './whatsapp-campaign-utils.mjs';
+} from '../domain/campaign-utils.mjs';
+
+/** @param {{ auth: any, document?: Document }} dependencies */
+export function createWhatsappDomain({ auth, document: documentRef = globalThis.document }) {
+const document = documentRef;
 
 const connectionSection = document.getElementById('whatsappConnection');
 const setupCard = document.getElementById('whatsappSetupCard');
@@ -912,5 +916,18 @@ async function initializeWhatsapp(context) {
   }
 }
 
-if (window.dotiAuthContext) initializeWhatsapp(window.dotiAuthContext);
-else window.addEventListener('doti:auth-ready', event => initializeWhatsapp(event.detail), { once: true });
+let mounted = false;
+return {
+  id: 'whatsapp',
+  async mount() {
+    if (mounted) return;
+    mounted = true;
+    await initializeWhatsapp(auth);
+  },
+  unmount() {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+    mounted = false;
+  }
+};
+}

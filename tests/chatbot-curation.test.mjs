@@ -15,7 +15,7 @@ import {
   sha256,
   summarizeInteractions,
   summarizePanelMetrics
-} from '../dot-admin/chatbot-curation-core.mjs';
+} from '../src/domains/curation/domain/curation-core.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -145,7 +145,7 @@ test('migração protege as tabelas e concede acesso explícito', () => {
 });
 
 test('controle permite desativar e remover bots com proteção da ingestão', () => {
-  const interfaceCode = fs.readFileSync(path.join(root, 'dot-admin/chatbot-curation.js'), 'utf8');
+  const interfaceCode = fs.readFileSync(path.join(root, 'src/domains/curation/ui/curation-domain.js'), 'utf8');
   const ingestCode = fs.readFileSync(path.join(root, 'supabase/functions/chatbot-ingest/index.ts'), 'utf8');
   assert.match(interfaceCode, /\.from\('chatbots'\)\s*\.update\(\{ is_active: nextActive \}\)/);
   assert.match(interfaceCode, /\.from\('chatbots'\)\.delete\(\)\.eq\('id', bot\.id\)/);
@@ -155,7 +155,7 @@ test('controle permite desativar e remover bots com proteção da ingestão', ()
 });
 
 test('novo bot aceita paleta de cores e imagem privada', () => {
-  const interfaceCode = fs.readFileSync(path.join(root, 'dot-admin/chatbot-curation.js'), 'utf8');
+  const interfaceCode = fs.readFileSync(path.join(root, 'src/domains/curation/ui/curation-domain.js'), 'utf8');
   assert.match(interfaceCode, /const BOT_COLORS = \[/);
   assert.match(interfaceCode, /name="avatar" accept="image\/png,image\/jpeg,image\/webp"/);
   assert.match(interfaceCode, /uploadOperationFile\(bot\.id, avatarFile\)/);
@@ -164,7 +164,7 @@ test('novo bot aceita paleta de cores e imagem privada', () => {
 });
 
 test('bots existentes podem ser editados sem perder conexoes e conversas', () => {
-  const interfaceCode = fs.readFileSync(path.join(root, 'dot-admin/chatbot-curation.js'), 'utf8');
+  const interfaceCode = fs.readFileSync(path.join(root, 'src/domains/curation/ui/curation-domain.js'), 'utf8');
   assert.match(interfaceCode, /data-edit-bot=/);
   assert.match(interfaceCode, /function openEditBot\(botId\)/);
   assert.match(interfaceCode, /\.from\('chatbots'\)\.update\(patch\)\.eq\('id', bot\.id\)/);
@@ -173,12 +173,12 @@ test('bots existentes podem ser editados sem perder conexoes e conversas', () =>
 });
 
 test('painel do bot exibe o titulo com o nome selecionado', () => {
-  const interfaceCode = fs.readFileSync(path.join(root, 'dot-admin/chatbot-curation.js'), 'utf8');
+  const interfaceCode = fs.readFileSync(path.join(root, 'src/domains/curation/ui/curation-domain.js'), 'utf8');
   assert.match(interfaceCode, /Painel de Controle Doti - \$\{bot\.name\}/);
 });
 
 test('fila de revisao identifica os metadados de cada conversa', () => {
-  const interfaceCode = fs.readFileSync(path.join(root, 'dot-admin/chatbot-curation.js'), 'utf8');
+  const interfaceCode = fs.readFileSync(path.join(root, 'src/domains/curation/ui/curation-domain.js'), 'utf8');
   assert.match(interfaceCode, /<small>Recebida em<\/small>/);
   assert.match(interfaceCode, /<small>Canal<\/small>/);
   assert.match(interfaceCode, /<small>Tempo<\/small>/);
@@ -186,7 +186,7 @@ test('fila de revisao identifica os metadados de cada conversa', () => {
 });
 
 test('detalhe do log exibe horario sem numeracao amarela', () => {
-  const interfaceCode = fs.readFileSync(path.join(root, 'dot-admin/chatbot-curation.js'), 'utf8');
+  const interfaceCode = fs.readFileSync(path.join(root, 'src/domains/curation/ui/curation-domain.js'), 'utf8');
   assert.match(interfaceCode, /curation-log-detail-time/);
   assert.match(interfaceCode, /<small>Horário<\/small>/);
   assert.doesNotMatch(interfaceCode, /String\(index \+ 1\)\.padStart/);

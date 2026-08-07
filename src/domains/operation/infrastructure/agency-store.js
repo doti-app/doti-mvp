@@ -21,6 +21,16 @@ const OPERATION_TABLES = [
 let context;
 let filePaths = new Map();
 
+/**
+ * Provides the authenticated application context to the operation repository.
+ * The repository deliberately owns no browser-global auth event or mutable
+ * `window` contract; the application composition root supplies it before use.
+ * @param {any} authContext
+ */
+export function configureOperationStore(authContext) {
+  context = authContext || null;
+}
+
 export function registerOperationFilePath(id, path) {
   if (!id || !path) return;
   filePaths.set(String(id), String(path));
@@ -28,14 +38,7 @@ export function registerOperationFilePath(id, path) {
 
 export async function waitForOperationContext() {
   if (context) return context;
-  if (window.dotiAuthContext) {
-    context = window.dotiAuthContext;
-    return context;
-  }
-  context = await new Promise(resolve => {
-    window.addEventListener('doti:auth-ready', event => resolve(event.detail), { once: true });
-  });
-  return context;
+  throw new Error('A sessão da operação não foi inicializada.');
 }
 
 export async function loadAgencyState() {

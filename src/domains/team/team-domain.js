@@ -12,6 +12,9 @@ const roleDescriptions = {
   viewer: 'Apenas acompanha a operação'
 };
 
+/** @param {{ auth: any, events?: EventTarget, document?: Document }} dependencies */
+export function createTeamDomain({ auth, events = new EventTarget(), document: documentRef = globalThis.document }) {
+const document = documentRef;
 let authContext;
 let teamState = { members: [], invitations: [], currentUserId: '', currentRole: '' };
 const LOCAL_TEAM_KEY = 'doti-local-team-v1';
@@ -63,6 +66,7 @@ function memberAvatar(member) {
   return escapeHtml(initials(member.full_name));
 }
 
+let teamNoticeTimer;
 function showTeamNotice(title, message, attention = false) {
   const toast = document.getElementById('toast');
   if (!toast) return;
@@ -71,8 +75,8 @@ function showTeamNotice(title, message, attention = false) {
   toast.querySelector('p').textContent = message;
   toast.setAttribute('role', attention ? 'alert' : 'status');
   toast.classList.add('show');
-  clearTimeout(showTeamNotice.timer);
-  showTeamNotice.timer = setTimeout(() => toast.classList.remove('show'), 3600);
+  clearTimeout(teamNoticeTimer);
+  teamNoticeTimer = setTimeout(() => toast.classList.remove('show'), 3600);
 }
 
 function defaultLocalTeam() {
@@ -206,12 +210,12 @@ async function teamRequest(action = 'list', body = {}) {
 function renderMetrics() {
   const members = teamState.members;
   const pendingEmails = new Set(teamState.invitations.map(invitation => invitation.email.toLowerCase()));
-  document.getElementById('teamMemberMetric').textContent = members.length;
+  document.getElementById('teamMemberMetric').textContent = String(members.length);
   document.getElementById('teamActiveMetric').textContent = members.filter(
     member => member.is_active && !pendingEmails.has(member.email.toLowerCase())
-  ).length;
-  document.getElementById('teamInviteMetric').textContent = teamState.invitations.length;
-  document.getElementById('teamNavCount').textContent = members.length || '';
+  ).length.toString();
+  document.getElementById('teamInviteMetric').textContent = String(teamState.invitations.length);
+  document.getElementById('teamNavCount').textContent = members.length ? String(members.length) : '';
 }
 
 function roleOptions(member) {
@@ -484,7 +488,7 @@ inviteButton.addEventListener('click', openInviteModal);
 teamNavItem.addEventListener('click', loadTeam);
 
 function applyRole(profile) {
-  authContext = window.dotiAuthContext;
+  authContext = auth;
   const canManageTeam = ['owner', 'admin'].includes(profile.role);
   teamNavItem.hidden = !canManageTeam;
   inviteButton.hidden = !canManageTeam;
@@ -509,17 +513,24 @@ function applyRole(profile) {
   }
 }
 
-window.addEventListener('doti:auth-ready', event => {
-  authContext = event.detail;
-  applyRole(event.detail.profile);
+const onProfileUpdated = () => {
   if (location.hash === '#equipe') loadTeam();
-});
+};
 
-window.addEventListener('doti:profile-updated', () => {
-  if (location.hash === '#equipe') loadTeam();
-});
-
-if (window.dotiAuthContext) {
-  applyRole(window.dotiAuthContext.profile);
-  if (location.hash === '#equipe') loadTeam();
+let mounted = false;
+return {
+  id: 'team',
+  async mount() {
+    if (mounted) return;
+    mounted = true;
+    authContext = auth;
+    applyRole(auth.profile);
+    events.addEventListener('profile-updated', onProfileUpdated);
+    if (location.hash === '#equipe') await loadTeam();
+  },
+  unmount() {
+    events.removeEventListener('profile-updated', onProfileUpdated);
+    mounted = false;
+  }
+};
 }

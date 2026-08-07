@@ -2,12 +2,24 @@
   "name": "doti-mvp",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "node local-server.js",
-    "test": "node --test tests/*.test.mjs",
-    "test:curadoria": "node --test tests/chatbot-curation.test.mjs"
+    "test": "npm run test:unit",
+    "test:unit": "node --test tests/*.test.mjs scripts/*.test.mjs supabase/functions/_shared/*.test.mjs",
+    "test:curadoria": "node --test tests/chatbot-curation.test.mjs",
+    "check:types": "tsc --project jsconfig.json",
+    "check:architecture": "node scripts/check-architecture.mjs",
+    "test:smoke": "playwright test",
+    "verify": "npm run test:unit && npm run check:types && npm run check:architecture && npm run test:smoke"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.57.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.55.0",
+    "typescript": "^5.9.3"
   }
 }

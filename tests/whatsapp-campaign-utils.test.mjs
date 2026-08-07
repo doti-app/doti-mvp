@@ -7,7 +7,7 @@ import {
   prepareCsvRecipients,
   preparePastedRecipients,
   renderTemplatePreview
-} from './whatsapp-campaign-utils.mjs';
+} from '../src/domains/whatsapp/domain/campaign-utils.mjs';
 
 test('normaliza números brasileiros e preserva internacionais completos', () => {
   assert.equal(normalizePhone('(11) 99999-9999'), '+5511999999999');

@@ -12,9 +12,44 @@ import {
   subscribeToAgencyChanges,
   uploadLegacyFiles,
   uploadOperationFile,
-  waitForOperationContext
-} from '/dot-admin/operation-store.js?v=6';
-import { analyzeVirgulinhaCommand } from '/dot-admin/virgulinha-engine.mjs?v=2';
+  waitForOperationContext,
+  configureOperationStore
+} from '../infrastructure/agency-store.js';
+import {
+  CLIENT_COLORS,
+  createDefaultClientWorkspace,
+  createEmptyOperationState,
+  loadLegacyOperationState,
+  normalizeOperationState,
+  OPERATION_COLORS as COLORS
+} from '../domain/state.js';
+import { createOperationFiles } from '../domain/files.js';
+import { createOperationPersistence } from '../domain/persistence.js';
+import { recordActivity } from '../domain/commands.js';
+import {
+  compareDeliverablesByDate as compareDeliverables,
+  currentStep as selectCurrentStep,
+  dateIsPast as selectDateIsPast,
+  effectiveDeadline as selectEffectiveDeadline,
+  macroStatus as selectMacroStatus,
+  nextStepDeadline as selectNextStepDeadline,
+  overdueDeadline as selectOverdueDeadline,
+  stepDeadlinesFromCurrent as selectStepDeadlines
+} from '../domain/selectors.js';
+import { createModalService } from '../../../shared/ui/modal-service.js';
+import { createOperationPages } from './pages.js';
+import { renderDashboardView } from './dashboard-view.js';
+import { analyzeVirgulinhaCommand } from '../domain/virgulinha-engine.mjs';
+
+/**
+ * Mounts the operation feature against an already-resolved application
+ * session. Keeping the state inside this factory makes it possible to tear
+ * down Realtime work without a browser-global auth event.
+ * @param {{ auth: any, document?: Document }} dependencies
+ */
+export function createOperationDomain({ auth, document: documentRef = globalThis.document }) {
+const document = documentRef;
+configureOperationStore(auth);
 
 const STORAGE_KEY = 'doti-agency-live-v3';
 const SIDEBAR_STORAGE_KEY = 'doti-sidebar-collapsed';
@@ -27,74 +62,15 @@ const ATTACHMENT_STORE_NAME = 'files';
 const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024;
 let attachmentDbPromise;
 
-const COLORS = ['site', 'video', 'social', 'branding', 'copy'];
-const CLIENT_COLORS = ['#ffd400', '#b8e1ff', '#c9f0df', '#e1d2ff', '#ffc9bd', '#d8e0ff', '#ffe8a3', '#cde7e1'];
-const DEFAULT_GROUPS = [
-  { id: 'g-atendimento', name: 'Atendimento', initials: 'AT' },
-  { id: 'g-planejamento', name: 'Planejamento', initials: 'PL' },
-  { id: 'g-copy', name: 'Copywriting', initials: 'CO' },
-  { id: 'g-design', name: 'Design', initials: 'DE' },
-  { id: 'g-coordenacao', name: 'Coordenação', initials: 'CR' },
-  { id: 'g-video', name: 'Vídeo', initials: 'VI' },
-  { id: 'g-web', name: 'Desenvolvimento Web', initials: 'DW' },
-  { id: 'g-branding', name: 'Branding', initials: 'BR' },
-  { id: 'g-cliente', name: 'Cliente / Atendimento', initials: 'CL' }
-];
-
-const DEFAULT_WORKFLOWS = [
-  {
-    id: 'wf-site', name: 'Site institucional', category: 'Site', description: 'Sites institucionais e landing pages', color: 'site',
-    steps: [
-      ['Briefing', 'g-atendimento'], ['Planejamento', 'g-planejamento'], ['Copywriting', 'g-copy'],
-      ['Design UI', 'g-design'], ['Aprovação interna', 'g-coordenacao'], ['Aprovação do cliente', 'g-cliente'],
-      ['Desenvolvimento', 'g-web'], ['Revisão', 'g-atendimento'], ['Publicação', 'g-web'], ['Concluído', 'g-atendimento']
-    ]
-  },
-  {
-    id: 'wf-video', name: 'Produção de vídeo', category: 'Vídeo', description: 'Vídeos institucionais, reels e captação', color: 'video',
-    steps: [
-      ['Briefing', 'g-atendimento'], ['Roteiro', 'g-copy'], ['Aprovação do roteiro', 'g-coordenacao'],
-      ['Captação / Produção', 'g-video'], ['Edição', 'g-video'], ['Revisão interna', 'g-coordenacao'],
-      ['Aprovação do cliente', 'g-cliente'], ['Ajustes', 'g-video'], ['Entrega final', 'g-atendimento']
-    ]
-  },
-  {
-    id: 'wf-design', name: 'Design para redes', category: 'Design', description: 'Posts, carrosséis e peças de campanha', color: 'social',
-    steps: [
-      ['Briefing', 'g-atendimento'], ['Criação', 'g-design'], ['Revisão interna', 'g-coordenacao'],
-      ['Aprovação do cliente', 'g-cliente'], ['Ajustes', 'g-design'], ['Entrega final', 'g-atendimento']
-    ]
-  },
-  {
-    id: 'wf-branding', name: 'Identidade visual', category: 'Branding', description: 'Estratégia, identidade e manual de marca', color: 'branding',
-    steps: [
-      ['Briefing estratégico', 'g-atendimento'], ['Pesquisa', 'g-planejamento'], ['Conceito', 'g-branding'],
-      ['Identidade visual', 'g-design'], ['Manual da marca', 'g-branding'], ['Revisão interna', 'g-coordenacao'],
-      ['Apresentação ao cliente', 'g-atendimento'], ['Ajustes', 'g-branding'], ['Entrega final', 'g-atendimento']
-    ]
-  }
-];
-
-const EMPTY_STATE = {
-  version: 3,
-  groups: DEFAULT_GROUPS,
-  workflows: DEFAULT_WORKFLOWS,
-  clients: [],
-  projects: [],
-  deliverables: [],
-  activity: []
-};
+const EMPTY_STATE = createEmptyOperationState();
 
 let state = normalizeWorkflowStepIds(structuredClone(EMPTY_STATE));
 const legacySnapshotExists = Boolean(localStorage.getItem(STORAGE_KEY));
-let legacyState = loadLegacyState();
+let legacyState = loadLegacyOperationState(localStorage, STORAGE_KEY);
 let operationRevision = 0;
 let queuedRevision = 0;
 let operationReady = false;
 let migrationPending = false;
-let persistQueue = [];
-let persistRunning = false;
-let persistEpoch = 0;
 let realtimeRefreshPending = false;
 let ignoreRealtimeUntil = 0;
 let unsubscribeRealtime;
@@ -105,67 +81,35 @@ let calendarCursor = new Date();
 calendarCursor.setDate(1);
 let selectedCalendarDate = localDateKey(new Date());
 
-function loadLegacyState() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    if (saved?.version === 3 && Array.isArray(saved.projects) && Array.isArray(saved.workflows)) return normalizeWorkflowStepIds(saved);
-  } catch (_) {}
-  return normalizeWorkflowStepIds(JSON.parse(JSON.stringify(EMPTY_STATE)));
-}
+const operationPersistence = createOperationPersistence({
+  async write(snapshot, expectedRevision) {
+    operationRevision = await saveAgencyState(snapshot, expectedRevision);
+    queuedRevision = Math.max(queuedRevision, operationRevision);
+    ignoreRealtimeUntil = Date.now() + 1200;
+    return operationRevision;
+  },
+  async onError(error) {
+    realtimeRefreshPending = false;
+    await handlePersistenceError(error);
+    queuedRevision = operationRevision;
+  },
+  onIdle() {
+    if (realtimeRefreshPending && !operationPersistence.hasPending && !document.querySelector('.doti-modal, .attachment-preview-layer')) {
+      refreshOperationFromServer();
+    }
+  }
+});
+
+const modalService = createModalService({
+  onClose() {
+    if (realtimeRefreshPending && operationReady && !operationPersistence.isRunning && !operationPersistence.hasPending) {
+      refreshOperationFromServer();
+    }
+  }
+});
+
 function normalizeWorkflowStepIds(data) {
-  data.clients ||= [];
-  data.clients.forEach((client, index) => {
-    client.color ||= CLIENT_COLORS[index % CLIENT_COLORS.length];
-    client.createdAt ||= new Date().toISOString();
-    client.workspace ||= [];
-    if (client.workspaceInitialized !== true) {
-      if (!client.workspace.length) client.workspace = createDefaultClientWorkspace();
-      client.workspaceInitialized = true;
-    }
-  });
-  const clientsByName = new Map(data.clients.map(client => [normalize(client.name), client]));
-  data.projects.forEach(project => {
-    let client = data.clients.find(item => item.id === project.clientId);
-    if (!client) {
-      const clientName = String(project.client || 'Cliente sem nome').trim();
-      client = clientsByName.get(normalize(clientName));
-      if (!client) {
-        client = {
-          id: uid('client'),
-          name: clientName,
-          color: CLIENT_COLORS[data.clients.length % CLIENT_COLORS.length],
-          logoId: '',
-          createdAt: project.createdAt || new Date().toISOString()
-        };
-        data.clients.push(client);
-        clientsByName.set(normalize(clientName), client);
-      }
-      project.clientId = client.id;
-    }
-    project.client = client.name;
-  });
-  data.workflows.forEach(workflow => {
-    workflow.active = workflow.active !== false;
-    workflow.steps = workflow.steps.map(([name, groupId, stepId]) => [name, groupId, stepId || uid('ws')]);
-  });
-  data.deliverables.forEach(deliverable => {
-    deliverable.attachments ||= [];
-    deliverable.links ||= [];
-    deliverable.note ??= deliverable.steps[deliverable.stepIndex]?.note || [...deliverable.steps].reverse().find(step => step.note)?.note || '';
-    delete deliverable.observations;
-    const workflow = data.workflows.find(item => item.id === deliverable.workflowId);
-    deliverable.steps.forEach((step, index) => {
-      if (!step.sourceStepId && workflow) step.sourceStepId = workflow.steps[index]?.[2] || uid('ws');
-      if (!step.sourceStepId) step.sourceStepId = '';
-    });
-  });
-  return data;
-}
-function createDefaultClientWorkspace() {
-  return [
-    { id: uid('client-block'), type: 'heading', content: '' },
-    { id: uid('client-block'), type: 'text', content: '' }
-  ];
+  return normalizeOperationState(data, { createId: uid });
 }
 function openAttachmentDb() {
   if (attachmentDbPromise) return attachmentDbPromise;
@@ -185,22 +129,26 @@ async function getLegacyAttachmentFile(id) {
     request.onerror = () => reject(request.error);
   });
 }
+const operationFiles = createOperationFiles({
+  isReady: () => operationReady,
+  readLegacy: getLegacyAttachmentFile,
+  upload: uploadOperationFile,
+  download: downloadOperationFile,
+  remove: removeOperationFile
+});
 function deleteStoredAttachments(deliverables) {
   deliverables.flatMap(item => item.attachments || []).forEach(attachment => {
     deleteAttachmentFile(attachment.id).catch(() => {});
   });
 }
 async function storeAttachmentFile(id, file) {
-  if (!operationReady) throw new Error('A operação ainda não foi carregada.');
-  return uploadOperationFile(id, file);
+  return operationFiles.upload(id, file);
 }
 async function getAttachmentFile(id) {
-  if (!operationReady) return getLegacyAttachmentFile(id);
-  return downloadOperationFile(id);
+  return operationFiles.download(id);
 }
 async function deleteAttachmentFile(id) {
-  if (!operationReady) throw new Error('A operação ainda não foi migrada.');
-  return removeOperationFile(id);
+  return operationFiles.remove(id);
 }
 function saveState() {
   renderAll();
@@ -214,53 +162,16 @@ function saveState() {
   }
   const snapshot = attachKnownFilePaths(structuredClone(state));
   const expectedRevision = queuedRevision;
-  const epoch = persistEpoch;
   queuedRevision += 1;
-  const completion = new Promise(resolve => {
-    persistQueue.push({ snapshot, expectedRevision, epoch, resolve });
-  });
-  flushPersistQueue();
-  return completion;
-}
-async function flushPersistQueue() {
-  if (persistRunning) return;
-  persistRunning = true;
-  try {
-    while (persistQueue.length) {
-      const entry = persistQueue.shift();
-      if (entry.epoch !== persistEpoch) {
-        entry.resolve(false);
-        continue;
-      }
-      try {
-        operationRevision = await saveAgencyState(entry.snapshot, entry.expectedRevision);
-        queuedRevision = Math.max(queuedRevision, operationRevision);
-        ignoreRealtimeUntil = Date.now() + 1200;
-        entry.resolve(true);
-      } catch (error) {
-        persistEpoch += 1;
-        persistQueue.splice(0).forEach(pending => pending.resolve(false));
-        realtimeRefreshPending = false;
-        await handlePersistenceError(error);
-        queuedRevision = operationRevision;
-        entry.resolve(false);
-        break;
-      }
-    }
-  } finally {
-    persistRunning = false;
-    if (realtimeRefreshPending && !persistQueue.length && !document.querySelector('.doti-modal, .attachment-preview-layer')) {
-      refreshOperationFromServer();
-    }
-  }
+  return operationPersistence.enqueue(snapshot, expectedRevision);
 }
 function uid(prefix) {
   return crypto.randomUUID();
 }
 function logActivity(action, detail) {
-  state.activity.unshift({ id: uid('a'), action, detail, at: new Date().toISOString() });
-  state.activity = state.activity.slice(0, 50);
+  recordActivity(state, action, detail, () => uid('a'), () => new Date().toISOString());
 }
+let notificationTimer;
 function notify(title, message, icon = '✓') {
   const isAttention = icon === '!';
   toast.querySelector(':scope > span').textContent = icon;
@@ -269,9 +180,16 @@ function notify(title, message, icon = '✓') {
   toast.setAttribute('role', isAttention ? 'alert' : 'status');
   toast.setAttribute('aria-live', isAttention ? 'assertive' : 'polite');
   toast.classList.add('show');
-  clearTimeout(notify.timer);
-  notify.timer = setTimeout(() => toast.classList.remove('show'), 3200);
+  clearTimeout(notificationTimer);
+  notificationTimer = setTimeout(() => toast.classList.remove('show'), 3200);
 }
+const operationPages = createOperationPages({
+  dashboard: renderDashboard,
+  demands: renderDemands,
+  workflows: renderWorkflows,
+  clients: renderClients,
+  virgulinha: () => {}
+});
 function showPage(id) {
   if (!document.getElementById(id)) id = 'dashboard';
   pages.forEach(page => page.classList.toggle('active', page.id === id));
@@ -279,17 +197,11 @@ function showPage(id) {
   profileSettingsEntry?.classList.toggle('active', id === 'meus-dados');
   profileSettingsEntry?.setAttribute('aria-current', id === 'meus-dados' ? 'page' : 'false');
   history.replaceState(null, '', id === 'dashboard' ? location.pathname : `#${id}`);
-  if (id === 'dashboard') renderDashboard();
-  if (id === 'demandas') renderDemands();
-  if (id === 'fluxos') renderWorkflows();
-  if (id === 'clientes') renderClients();
+  operationPages.show(id);
 }
 
 function renderAll() {
-  renderDashboard();
-  renderDemands();
-  renderWorkflows();
-  renderClients();
+  operationPages.renderAll();
   document.getElementById('demandNavCount').textContent = state.deliverables.filter(item => item.status !== 'done').length;
   document.getElementById('workflowNavCount').textContent = state.workflows.length;
   document.getElementById('clientNavCount').textContent = state.clients.length;
@@ -311,33 +223,19 @@ function groupById(id) {
   return state.groups.find(group => group.id === id) || { name: 'Sem grupo', initials: '—' };
 }
 function currentStep(deliverable) {
-  return deliverable.steps[deliverable.stepIndex] || deliverable.steps.at(-1);
+  return selectCurrentStep(deliverable);
 }
 function stepDeadlinesFromCurrent(deliverable) {
-  return deliverable.steps
-    .map((step, index) => ({ step, index, due: step.due || '' }))
-    .filter(item => item.index >= deliverable.stepIndex && item.due);
+  return selectStepDeadlines(deliverable);
 }
 function nextStepDeadline(deliverable) {
-  const deadlines = stepDeadlinesFromCurrent(deliverable);
-  const currentDeadline = deadlines.find(item => item.index === deliverable.stepIndex);
-  if (currentDeadline) return currentDeadline;
-  return deadlines.sort((a, b) => a.due.localeCompare(b.due))[0] || null;
+  return selectNextStepDeadline(deliverable);
 }
 function effectiveDeadline(deliverable) {
-  const milestone = nextStepDeadline(deliverable);
-  if (milestone) return { due: milestone.due, source: 'step', label: milestone.step.name };
-  const project = projectById(deliverable.projectId);
-  const generalDue = deliverable.due || project?.due || '';
-  return generalDue ? { due: generalDue, source: 'project', label: 'Prazo geral' } : null;
+  return selectEffectiveDeadline(deliverable, projectById);
 }
 function compareDeliverablesByDate(a, b) {
-  const deadlineA = effectiveDeadline(a);
-  const deadlineB = effectiveDeadline(b);
-  if (deadlineA && deadlineB && deadlineA.due !== deadlineB.due) return deadlineA.due.localeCompare(deadlineB.due);
-  if (deadlineA && !deadlineB) return -1;
-  if (!deadlineA && deadlineB) return 1;
-  return String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id));
+  return compareDeliverables(a, b, effectiveDeadline);
 }
 function compareProjectsByDate(a, b) {
   const deliverablesA = state.deliverables.filter(item => item.projectId === a.id).sort(compareDeliverablesByDate);
@@ -350,62 +248,30 @@ function compareProjectsByDate(a, b) {
   return String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id));
 }
 function dateIsPast(value) {
-  return Boolean(value) && new Date(`${value}T23:59:59`) < new Date();
+  return selectDateIsPast(value);
 }
 function overdueDeadline(project, deliverable) {
-  if (deliverable.status === 'done') return null;
-  const overdueStep = stepDeadlinesFromCurrent(deliverable).find(item => dateIsPast(item.due));
-  if (overdueStep) return { kind: 'step', due: overdueStep.due, label: overdueStep.step.name };
-  const overallDue = deliverable.due || project?.due;
-  return dateIsPast(overallDue) ? { kind: 'project', due: overallDue, label: 'Prazo do entregável' } : null;
+  return selectOverdueDeadline(project, deliverable);
 }
 function macroStatus(deliverable) {
-  if (deliverable.status === 'done') return 'done';
-  const step = currentStep(deliverable);
-  if (/aprovação|apresentação|revisão interna/i.test(step.name) || step.groupId === 'g-cliente' || step.groupId === 'g-coordenacao') return 'approval';
-  if (deliverable.stepIndex <= 1) return 'planning';
-  return 'production';
+  return selectMacroStatus(deliverable);
 }
 function isOverdue(project, deliverable) {
   return Boolean(overdueDeadline(project, deliverable));
 }
 
 function renderDashboard() {
-  const today = new Date();
-  document.getElementById('todayLabel').textContent = today.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).toUpperCase();
-  const active = state.deliverables.filter(item => item.status !== 'done');
-  const approvals = active.filter(item => macroStatus(item) === 'approval');
-  const overdue = active.map(item => ({
-    item,
-    deadline: overdueDeadline(projectById(item.projectId), item)
-  })).filter(entry => entry.deadline);
-  const completed = state.deliverables.filter(item => item.status === 'done');
-  document.getElementById('dashboardHeadline').textContent = active.length
-    ? `${active.length} ${active.length === 1 ? 'entregável está em andamento' : 'entregáveis estão em andamento'}.`
-    : 'Nenhuma demanda cadastrada. Crie seu primeiro projeto para começar.';
-  document.getElementById('dashboardMetrics').innerHTML = [
-    ['□', state.projects.length, 'Projetos', 'yellow'],
-    ['↝', active.length, 'Em andamento', 'blue'],
-    ['◷', approvals.length, 'Em aprovação', 'violet'],
-    ['✓', completed.length, 'Concluídos', 'green']
-  ].map(([icon, value, label, color]) => `<article><span class="metric-icon ${color}">${icon}</span><div><small>${label}</small><strong>${value}</strong><em>${metricHint(label, value)}</em></div></article>`).join('');
-
-  const attention = [
-    ...overdue.map(({ item, deadline }) => ({ item, type: 'Atrasado', className: 'danger', detail: `${deadline.label} · ${formatDate(deadline.due)}` })),
-    ...approvals.filter(item => !overdue.some(entry => entry.item.id === item.id)).map(item => ({ item, type: 'Aprovação', className: 'warning', detail: currentStep(item).name }))
-  ];
-  document.getElementById('attentionSubtitle').textContent = attention.length ? `${attention.length} ${attention.length === 1 ? 'item encontrado' : 'itens encontrados'}` : 'Nenhuma pendência no momento';
-  document.getElementById('attentionList').innerHTML = attention.length
-    ? attention.slice(0, 6).map(entry => {
-      const project = projectById(entry.item.projectId);
-      return `<button class="attention-row" data-open-deliverable="${entry.item.id}"><i class="${entry.className}"></i><div><strong>${escapeHtml(entry.item.name)}</strong><small>${escapeHtml(project?.client || '')} · ${escapeHtml(entry.detail)}</small></div><span>${entry.type} →</span></button>`;
-    }).join('')
-    : emptyBlock('Tudo em ordem', state.projects.length ? 'Não há prazos vencidos nem aprovações pendentes.' : 'As pendências aparecerão aqui quando você iniciar um projeto.', '✓');
-
-  const recent = [...state.projects].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).slice(0, 5);
-  document.getElementById('recentProjects').innerHTML = recent.length
-    ? recent.map(renderProjectRow).join('')
-    : emptyBlock('Nenhum projeto ainda', 'Crie um projeto e acompanhe o progresso por aqui.', '□', '<button class="primary-btn" data-create-project>Criar primeiro projeto</button>');
+  renderDashboardView({
+    state,
+    projectById,
+    clientForProject,
+    currentStep,
+    overdueDeadline,
+    macroStatus,
+    formatDate,
+    metricHint,
+    initials
+  });
   bindDynamicActions();
   hydrateClientLogos(document.getElementById('recentProjects'));
 }
@@ -415,6 +281,7 @@ function metricHint(label, value) {
   return 'Atualizado agora';
 }
 
+/** @param {ParentNode} [root] */
 async function hydrateClientLogos(root = document) {
   const images = [...root.querySelectorAll('img[data-client-logo]')];
   await Promise.all(images.map(async image => {
@@ -492,6 +359,7 @@ function renderClientWorkspaceBlock(block) {
   if (block.type === 'pdf') return `<article class="workspace-block workspace-file-block workspace-pdf-block" draggable="true" data-workspace-block="${block.id}">${controls}<button type="button" data-preview-workspace-file="${block.id}"><b>PDF</b><div><strong>${escapeHtml(block.name)}</strong><small>${formatFileSize(block.size || 0)} · clicar para visualizar</small></div></button></article>`;
   return `<article class="workspace-block" draggable="true" data-workspace-block="${block.id}">${controls}<div class="workspace-text" contenteditable="true" data-workspace-content data-placeholder="Escreva algo…">${linkifyObservationText(block.content || '')}</div></article>`;
 }
+/** @param {ParentNode} root */
 async function hydrateWorkspaceImages(root) {
   await Promise.all([...root.querySelectorAll('img[data-workspace-image]')].map(async image => {
     try {
@@ -1778,7 +1646,7 @@ function openGroupModal() {
 }
 
 function openGroupRemoval(groupId) {
-  const group = groupById(groupId);
+  const group = /** @type {any} */ (groupById(groupId));
   if (!group?.id) return;
   if (state.groups.length <= 1) return notify('Grupo obrigatório', 'Mantenha pelo menos um grupo para atribuir às etapas.');
   const workflowUses = state.workflows.reduce((sum, workflow) => sum + workflow.steps.filter(step => step[1] === groupId).length, 0);
@@ -1866,28 +1734,10 @@ function bindDynamicActions() {
 }
 
 function openModal(title, body, onSubmit, submitLabel = 'Salvar', afterOpen) {
-  closeModal();
-  const modal = document.createElement('div');
-  modal.className = 'doti-modal';
-  modal.innerHTML = `<form><header><h2>${escapeHtml(title)}</h2><button type="button" class="modal-close">×</button></header><div class="modal-body">${body}</div><footer><button type="button" class="cancel">Cancelar</button><button type="submit" class="primary-btn">${escapeHtml(submitLabel)}</button></footer></form>`;
-  document.body.appendChild(modal);
-  const form = modal.querySelector('form');
-  modal.querySelector('.modal-close').onclick = closeModal;
-  modal.querySelector('.cancel').onclick = closeModal;
-  modal.onclick = event => { if (event.target === modal) closeModal(); };
-  form.onsubmit = event => {
-    event.preventDefault();
-    const shouldClose = onSubmit(form);
-    if (shouldClose !== false) closeModal();
-  };
-  afterOpen?.(form);
-  form.querySelector('input:not([type="checkbox"])')?.focus();
+  return modalService.openLegacy({ title, bodyHtml: body, onSubmit, submitLabel, afterOpen });
 }
 function closeModal() {
-  document.querySelector('.doti-modal')?.remove();
-  if (realtimeRefreshPending && operationReady && !persistRunning && !persistQueue.length) {
-    refreshOperationFromServer();
-  }
+  modalService.close();
 }
 async function refreshOperationFromServer() {
   realtimeRefreshPending = false;
@@ -1898,13 +1748,7 @@ async function refreshOperationFromServer() {
   }
 }
 function confirmAction(title, message, action) {
-  const currentModal = document.querySelector('.doti-modal');
-  const confirm = document.createElement('div');
-  confirm.className = 'confirm-layer';
-  confirm.innerHTML = `<div><span class="confirm-icon">!</span><h3>${escapeHtml(title)}</h3><p>${escapeHtml(message)}</p><footer><button class="outline-btn" data-cancel>Cancelar</button><button class="danger-btn" data-confirm>Confirmar exclusão</button></footer></div>`;
-  (currentModal || document.body).appendChild(confirm);
-  confirm.querySelector('[data-cancel]').onclick = () => confirm.remove();
-  confirm.querySelector('[data-confirm]').onclick = () => { confirm.remove(); action(); };
+  return modalService.confirm({ title, message, onConfirm: action });
 }
 
 function openRejectionDialog(deliverable, project, approvalStep, deliverableForm) {
@@ -2083,14 +1927,14 @@ function exportBackup() {
   notify('Backup exportado', 'Guarde o arquivo em um local seguro.');
 }
 function importBackup(file) {
-  if (!['owner', 'admin'].includes(window.dotiAuthContext?.profile?.role)) {
+  if (!['owner', 'admin'].includes(auth?.profile?.role)) {
     notify('Acesso restrito', 'Somente proprietário ou administrador pode restaurar um backup.', '!');
     return;
   }
   const reader = new FileReader();
   reader.onload = async () => {
     try {
-      const imported = JSON.parse(reader.result);
+      const imported = JSON.parse(String(reader.result || ''));
       if (![3, 4].includes(imported?.version) || !Array.isArray(imported.projects) || !Array.isArray(imported.workflows)) throw new Error('invalid');
       const normalized = normalizeWorkflowStepIds(imported);
       state = imported.version === 3 ? canonicalizeLegacyState(normalized).state : normalized;
@@ -2131,7 +1975,7 @@ async function handlePersistenceError(error) {
 
 function applyLoadedState(loaded) {
   operationRevision = Number(loaded.revision || 0);
-  if (!persistRunning && !persistQueue.length) queuedRevision = operationRevision;
+  if (!operationPersistence.isRunning && !operationPersistence.hasPending) queuedRevision = operationRevision;
   state = normalizeWorkflowStepIds({
     version: 4,
     groups: loaded.groups || [],
@@ -2231,7 +2075,7 @@ function bindRealtime(agencyId) {
   unsubscribeRealtime?.();
   unsubscribeRealtime = subscribeToAgencyChanges(agencyId, async () => {
     if (!operationReady || Date.now() < ignoreRealtimeUntil) return;
-    if (persistRunning || persistQueue.length) {
+    if (operationPersistence.isRunning || operationPersistence.hasPending) {
       realtimeRefreshPending = true;
       return;
     }
@@ -2428,6 +2272,7 @@ function renderVirgulinhaProjectReview(fields = {}, guided = false) {
 
 function guessVirgulinhaGroupId(stepName) {
   const value = normalize(stepName);
+  /** @type {[RegExp, string][]} */
   const rules = [
     [/cliente|aprovacao do cliente/, 'cliente'], [/design|layout|criacao/, 'design'], [/copy|texto|roteiro/, 'copy'],
     [/video|captacao|edicao/, 'video'], [/desenvolvimento|site|publicacao/, 'desenvolvimento'],
@@ -2748,4 +2593,20 @@ document.addEventListener('keydown', event => {
   closeModal();
 });
 
-initializeOperation();
+let mounted = false;
+
+return {
+  id: 'operation',
+  async mount() {
+    if (mounted) return;
+    mounted = true;
+    await initializeOperation();
+  },
+  unmount() {
+    unsubscribeRealtime?.();
+    unsubscribeRealtime = undefined;
+    operationPersistence.reset();
+    mounted = false;
+  }
+};
+}
