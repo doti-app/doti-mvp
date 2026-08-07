@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createOperationFiles } from '../core/operation-files.js';
-import { recordActivity } from '../core/operation-commands.js';
-import { createOperationPersistence } from '../core/operation-persistence.js';
-import { effectiveDeadline, macroStatus, overdueDeadline } from '../core/operation-selectors.js';
-import { createEmptyOperationState, normalizeOperationState } from '../core/operation-state.js';
+import { createOperationFiles } from '../src/domains/operation/domain/files.js';
+import { recordActivity } from '../src/domains/operation/domain/commands.js';
+import { createOperationPersistence } from '../src/domains/operation/domain/persistence.js';
+import { effectiveDeadline, macroStatus, overdueDeadline } from '../src/domains/operation/domain/selectors.js';
+import { createEmptyOperationState, normalizeOperationState } from '../src/domains/operation/domain/state.js';
 
 test('normaliza snapshots legados sem perder a referência do cliente ou as etapas', () => {
   let id = 0;

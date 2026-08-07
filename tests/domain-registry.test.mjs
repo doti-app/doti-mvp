@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createDomainRegistry } from '../core/domain-registry.js';
+import { createDomainRegistry } from '../src/app/domain-registry.js';
 
 test('monta cada domínio somente uma vez e desmonta em ordem reversa', async () => {
   const events = [];

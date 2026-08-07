@@ -71,9 +71,9 @@ globalThis.document = {
   getElementById: id => elementsById.get(id) || null
 };
 
-const { element } = await import('../core/dom.js');
-const { createModalService } = await import('../core/modal-service.js');
-const { renderDashboardView } = await import('../domains/operation/pages/dashboard-view.js');
+const { element } = await import('../src/shared/dom.js');
+const { createModalService } = await import('../src/shared/ui/modal-service.js');
+const { renderDashboardView } = await import('../src/domains/operation/ui/dashboard-view.js');
 
 test('constrói elementos com texto literal, sem interpretar HTML fornecido', () => {
   const unsafe = '<img src=x onerror=alert(1)>';

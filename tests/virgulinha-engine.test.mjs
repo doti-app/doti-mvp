@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeVirgulinhaCommand } from '../dot-admin/virgulinha-engine.mjs';
+import { analyzeVirgulinhaCommand } from '../src/domains/operation/domain/virgulinha-engine.mjs';
 
 const context = {
   now: new Date(2026, 6, 31),

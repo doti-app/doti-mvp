@@ -8,13 +8,25 @@ Os dados são salvos no `localStorage` do navegador. Isso permite utilizar a pla
 
 Para modificar e testar a Doti no computador:
 
-1. Instale a versão LTS do Node.js.
+1. Instale o Node.js 22.
 2. Dê dois cliques em `iniciar-doti-local.cmd`.
 3. Abra `http://localhost:3000` no navegador.
 4. Mantenha a janela do servidor aberta enquanto estiver testando.
 
 Depois de alterar e salvar um arquivo, atualize a página com `Ctrl + F5`.
 Para encerrar o servidor, pressione `Ctrl + C` na janela aberta.
+
+O servidor local escuta somente em `127.0.0.1`, portanto não expõe o projeto à rede local.
+
+### Verificação antes de enviar uma alteração
+
+Após instalar as dependências com `npm ci`, execute:
+
+```bash
+npm run verify
+```
+
+O comando roda os testes unitários, a compilação sem emissão, as regras de arquitetura e os smoke tests Chromium no modo local seguro. O mesmo conjunto é obrigatório no GitHub Actions.
 
 O arquivo `.env.local` contém as variáveis usadas apenas no computador e não deve ser enviado ao GitHub. O ambiente local pode apontar para o mesmo Supabase da produção; nesse caso, alterações de dados feitas durante os testes também afetam os dados reais.
 
@@ -307,21 +319,19 @@ locais. Ao confirmar, aquele navegador será tratado como a cópia oficial. Os
 arquivos presentes serão enviados ao Storage e arquivos locais ausentes serão
 relatados sem gerar referências quebradas.
 
-## Arquivos do projeto
+## Arquitetura do projeto
 
-- `index.html`: estrutura das três telas.
-- `styles.css`: identidade visual principal.
-- `styles-extra.css`: complementos visuais herdados do protótipo.
-- `functional.css`: componentes funcionais, formulários, estados vazios e responsividade.
-- `app.js`: regras, persistência, criação, edição, filtros, tarefas, fluxos e backups.
-- `dot-admin/index.html`: página independente de acesso à Doti.
-- `dot-admin/login.css`: identidade visual e responsividade da área de login.
-- `dot-admin/login.js`: login, cadastro, confirmação e recuperação de senha.
-- `dot-admin/auth-guard.js`: proteção do painel, identificação do perfil e logout.
-- `dot-admin/supabase-client.js`: cliente compartilhado de autenticação.
-- `dot-admin/operation-store.js`: carregamento, gravação, Realtime, Storage e migração assistida.
-- `dot-admin/whatsapp-admin.js`: configuração da conta, campanhas e consulta dos templates aprovados.
-- `dot-admin/whatsapp-campaign-utils.mjs`: leitura de CSV, normalização, deduplicação e prévia das campanhas.
+As rotas públicas continuam na raiz: `index.html`, `dot-admin/index.html`, `assets/`, `api/` e `supabase/`. Todo o código de aplicação está em `src/`:
+
+- `src/app/`: bootstrap, sessão autenticada, composição e navegação.
+- `src/shared/`: autenticação, helpers DOM e serviços de interface reutilizáveis.
+- `src/domains/operation/`: estado, regras, persistência, arquivos e interface operacional.
+- `src/domains/curation/`, `whatsapp/`, `team/` e `profile/`: seus respectivos domínios e interfaces.
+- `src/styles/`: identidade visual, complementos e componentes funcionais.
+
+Os domínios recebem sessão, documento, eventos, navegação e notificações pela composição da aplicação. Eles não leem contexto de autenticação pelo `window` nem se comunicam por eventos globais.
+
+- `dot-admin/index.html`: página independente de acesso, preservando a URL pública.
 - `api/auth-config.js`: entrega segura da configuração pública no ambiente Vercel.
 - `supabase/migrations/`: autenticação, tabelas operacionais, RLS, RPCs, Storage e Realtime.
 - `supabase/functions/team-admin/`: convites e administração privilegiada da equipe.
