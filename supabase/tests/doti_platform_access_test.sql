@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap;
-select plan(27);
+select plan(31);
 
 insert into auth.users (id, email)
 values
@@ -71,6 +71,31 @@ select ok(
 select ok(
   not has_table_privilege('authenticated', 'public.platform_staff_invitations', 'SELECT'),
   'browser clients cannot query DOT invitations directly'
+);
+select is(
+  (
+    select p.prosecdef
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'get_account_context'
+      and pg_get_function_identity_arguments(p.oid) = ''
+  ),
+  false,
+  'account context executes with the caller privileges'
+);
+select has_index(
+  'public', 'agencies', 'agencies_archived_by_idx',
+  'archived agency actors have a covering foreign-key index'
+);
+select has_index(
+  'public', 'platform_staff', 'platform_staff_created_by_idx',
+  'platform staff creators have a covering foreign-key index'
+);
+select has_index(
+  'public', 'platform_staff_invitations',
+  'platform_staff_invitations_invited_by_idx',
+  'platform invitations have a covering inviter index'
 );
 
 set local role authenticated;
