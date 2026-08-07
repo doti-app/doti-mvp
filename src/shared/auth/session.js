@@ -1,4 +1,4 @@
-import { getAuthConfig, getSupabase } from './supabase-client.js';
+import { getAuthConfig, getSupabase, getSupabaseForAgency } from './supabase-client.js';
 
 let authContext = null;
 let stopSubscription = () => {};
@@ -82,14 +82,62 @@ function renderAvatar(element, profile) {
     .toUpperCase();
 }
 
+function addSupportBanner(agency, platformStaff) {
+  const banner = document.createElement('div');
+  banner.className = 'doti-support-banner';
+  banner.innerHTML = `
+    <div><strong>Modo de suporte DOT</strong><span></span></div>
+    <a href="/doti/">Voltar ao portal DOT</a>`;
+  banner.querySelector('span').textContent = `${agency.name} · ${platformStaff.role}`;
+  document.body.prepend(banner);
+}
+
+async function accountContextFor(supabase) {
+  const { data, error } = await supabase.rpc('get_account_context');
+  if (error) {
+    if (String(error.message || '').includes('get_account_context')) return null;
+    throw error;
+  }
+  return data || null;
+}
+
+async function profileFor(supabase, userId) {
+  let { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, agency_id, email, full_name, agency_name, role, is_active, avatar_url')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (profileError && String(profileError.message).includes('avatar_url')) {
+    const fallback = await supabase
+      .from('profiles')
+      .select('id, agency_id, email, full_name, agency_name, role, is_active')
+      .eq('id', userId)
+      .maybeSingle();
+    profile = fallback.data ? { ...fallback.data, avatar_url: '' } : null;
+    profileError = fallback.error;
+  }
+  if (profileError && String(profileError.message).includes('is_active')) {
+    const fallback = await supabase
+      .from('profiles')
+      .select('id, agency_id, email, full_name, agency_name, role')
+      .eq('id', userId)
+      .maybeSingle();
+    profile = fallback.data ? { ...fallback.data, is_active: true, avatar_url: '' } : null;
+    profileError = fallback.error;
+  }
+  if (profileError) throw profileError;
+  return profile;
+}
+
 async function protectPanel() {
   try {
     const config = await getAuthConfig();
     if (config.localMode) {
       return startLocalMode();
     }
-    const supabase = await getSupabase();
-    const { data: { session }, error } = await supabase.auth.getSession();
+    const baseSupabase = await getSupabase();
+    const { data: { session }, error } = await baseSupabase.auth.getSession();
     if (error) throw error;
     if (!session) {
       location.replace('/dot-admin/?reason=expired');
@@ -97,39 +145,69 @@ async function protectPanel() {
     }
 
     const user = session.user;
-    let { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id, agency_id, email, full_name, agency_name, role, is_active, avatar_url')
-      .eq('id', user.id)
-      .maybeSingle();
+    const accountContext = await accountContextFor(baseSupabase);
+    const supportAgencyId = new URLSearchParams(location.search).get('supportAgency');
+    let supabase = baseSupabase;
+    let profile;
+    let supportMode = false;
+    let supportAgency = null;
+    const platformStaff = accountContext?.platform || null;
 
-    if (profileError && String(profileError.message).includes('avatar_url')) {
-      const fallback = await supabase
-        .from('profiles')
-        .select('id, agency_id, email, full_name, agency_name, role, is_active')
-        .eq('id', user.id)
+    if (supportAgencyId) {
+      if (!platformStaff?.isActive) {
+        location.replace('/doti/?error=platform-access');
+        return;
+      }
+      supabase = await getSupabaseForAgency(supportAgencyId);
+      const { data: agency, error: agencyError } = await supabase
+        .from('agencies')
+        .select('id,name,status')
+        .eq('id', supportAgencyId)
         .maybeSingle();
-      profile = fallback.data ? { ...fallback.data, avatar_url: '' } : null;
-      profileError = fallback.error;
+      if (agencyError || !agency || agency.status !== 'active') {
+        location.replace('/doti/?error=agency-unavailable');
+        return;
+      }
+      supportMode = true;
+      supportAgency = agency;
+      profile = {
+        id: user.id,
+        agency_id: agency.id,
+        email: platformStaff.email || user.email,
+        full_name: platformStaff.fullName,
+        agency_name: agency.name,
+        role: platformStaff.role,
+        is_active: true,
+        avatar_url: platformStaff.avatarUrl || '',
+        is_doti_staff: true
+      };
+      const { error: entryError } = await baseSupabase.functions.invoke('platform-admin', {
+        body: { action: 'record_agency_entry', agencyId: agency.id }
+      });
+      if (entryError) console.warn('Não foi possível registrar a entrada de suporte.', entryError);
+    } else {
+      if (accountContext?.personalAgency?.status === 'archived') {
+        if (platformStaff?.isActive) {
+          location.replace('/doti/?error=personal-agency-archived');
+          return;
+        }
+        await baseSupabase.auth.signOut();
+        location.replace('/dot-admin/?error=agency-archived');
+        return;
+      }
+      profile = await profileFor(baseSupabase, user.id);
+      if (!profile || profile.is_active === false) {
+        if (platformStaff?.isActive) {
+          location.replace('/doti/');
+          return;
+        }
+        await baseSupabase.auth.signOut();
+        location.replace('/dot-admin/?error=disabled');
+        return;
+      }
     }
-    if (profileError && String(profileError.message).includes('is_active')) {
-      const fallback = await supabase
-        .from('profiles')
-        .select('id, agency_id, email, full_name, agency_name, role')
-        .eq('id', user.id)
-        .maybeSingle();
-      profile = fallback.data ? { ...fallback.data, is_active: true, avatar_url: '' } : null;
-      profileError = fallback.error;
-    }
-    if (profileError) throw profileError;
 
-    if (!profile || profile.is_active === false) {
-      await supabase.auth.signOut();
-      location.replace('/dot-admin/?error=disabled');
-      return;
-    }
-
-    if (profile.role !== 'owner') {
+    if (!supportMode && profile.role !== 'owner') {
       const { error: invitationError } = await supabase.functions.invoke('team-admin', {
         body: { action: 'accept_invite' }
       });
@@ -149,20 +227,34 @@ async function protectPanel() {
     const profileElement = document.querySelector('.profile');
     if (profileElement) {
       profileElement.querySelector('strong').textContent = fullName;
-      profileElement.querySelector('small').textContent = `${agencyName} · ${roleLabels[profile?.role] || 'membro'}`;
+      profileElement.querySelector('small').textContent = supportMode
+        ? `${agencyName} · suporte DOT ${roleLabels[profile?.role] || 'membro'}`
+        : `${agencyName} · ${roleLabels[profile?.role] || 'membro'}`;
       renderAvatar(profileElement.querySelector('.avatar'), profile);
       profileElement.title = user.email;
     }
 
     document.body.dataset.userRole = profile.role;
-    authContext = { supabase, session, user, profile };
+    document.body.dataset.supportMode = String(supportMode);
+    if (supportMode) addSupportBanner(supportAgency, platformStaff);
+    authContext = {
+      supabase,
+      baseSupabase,
+      session,
+      user,
+      profile,
+      accountContext,
+      platformStaff,
+      supportMode,
+      supportAgency
+    };
 
     document.getElementById('logoutButton')?.addEventListener('click', async () => {
-      await supabase.auth.signOut();
+      await baseSupabase.auth.signOut();
       location.replace('/dot-admin/');
     });
 
-    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
+    const { data } = baseSupabase.auth.onAuthStateChange((event, nextSession) => {
       if (nextSession && authContext) {
         authContext.session = nextSession;
       }

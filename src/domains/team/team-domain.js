@@ -193,8 +193,23 @@ async function teamRequest(action = 'list', body = {}) {
   if (authContext?.localMode) {
     return localTeamRequest(action, body);
   }
-  const { data, error } = await authContext.supabase.functions.invoke('team-admin', {
-    body: { action, ...body }
+  const supportActions = {
+    list: 'agency_team_list',
+    invite: 'agency_team_invite',
+    update_member: 'agency_team_update_member',
+    revoke_invitation: 'agency_team_revoke_invitation'
+  };
+  const supportMode = Boolean(authContext.supportMode);
+  const functionName = supportMode ? 'platform-admin' : 'team-admin';
+  const requestAction = supportMode ? supportActions[action] : action;
+  if (!requestAction) throw new Error('Esta ação não está disponível no modo de suporte.');
+  const client = authContext.baseSupabase || authContext.supabase;
+  const { data, error } = await client.functions.invoke(functionName, {
+    body: {
+      action: requestAction,
+      ...(supportMode ? { agencyId: authContext.profile.agency_id } : {}),
+      ...body
+    }
   });
   if (error) {
     let message = error.message;

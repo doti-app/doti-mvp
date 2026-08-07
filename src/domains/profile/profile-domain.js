@@ -193,11 +193,19 @@ function initializeProfile(context) {
   context.profile = profile;
   if (context.localMode) syncLocalTeam(profile);
 
-  storageHint.textContent = context.localMode
-    ? 'No modo local, as alterações ficam somente neste navegador.'
-    : 'Nome e avatar são salvos com segurança no perfil da sua conta.';
-  form.querySelector('[type="submit"]').disabled = false;
+  storageHint.textContent = context.supportMode
+    ? 'Você está usando sua identidade DOT. Edite este perfil pelo portal interno.'
+    : context.localMode
+      ? 'No modo local, as alterações ficam somente neste navegador.'
+      : 'Nome e avatar são salvos com segurança no perfil da sua conta.';
+  form.querySelector('[type="submit"]').disabled = Boolean(context.supportMode);
   applyProfile(profile);
+
+  if (context.supportMode) {
+    fullNameInput.readOnly = true;
+    avatarPicker.querySelectorAll('button').forEach(button => { button.disabled = true; });
+    avatarRemoveButton.disabled = true;
+  }
 
   photoInput.disabled = !context.localMode;
   photoInput.closest('.profile-photo-upload')?.classList.toggle('is-disabled', !context.localMode);
@@ -260,6 +268,10 @@ fullNameInput.addEventListener('input', () => {
 
 form.addEventListener('submit', async event => {
   event.preventDefault();
+  if (authContext.supportMode) {
+    showStatus('Volte ao portal DOT para atualizar seu perfil interno.', true);
+    return;
+  }
   const fullName = fullNameInput.value.trim();
   if (fullName.length < 2) {
     showStatus('Informe um nome com pelo menos 2 caracteres.', true);

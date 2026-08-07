@@ -11,9 +11,10 @@
     "test:unit": "node --test tests/*.test.mjs scripts/*.test.mjs supabase/functions/_shared/*.test.mjs",
     "test:curadoria": "node --test tests/chatbot-curation.test.mjs",
     "check:types": "tsc --project jsconfig.json",
+    "check:edge-types": "tsc --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --allowJs --checkJs false --skipLibCheck supabase/functions/platform-admin/index.ts supabase/functions/team-admin/index.ts supabase/functions/meta-integration/index.ts",
     "check:architecture": "node scripts/check-architecture.mjs",
     "test:smoke": "playwright test",
-    "verify": "npm run test:unit && npm run check:types && npm run check:architecture && npm run test:smoke"
+    "verify": "npm run test:unit && npm run check:types && npm run check:edge-types && npm run check:architecture && npm run test:smoke"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.57.4"

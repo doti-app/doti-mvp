@@ -1,3 +1,4 @@
+/// <reference path="../_shared/edge-runtime.d.ts" />
 import {
   buildTemplateComponents,
   classifyMetaFailure,
@@ -99,7 +100,7 @@ function allowedOrigin(request: Request) {
 function corsHeaders(request: Request) {
   return {
     'Access-Control-Allow-Origin': allowedOrigin(request),
-    'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
+    'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info, x-doti-agency-id',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Cache-Control': 'no-store, max-age=0',
     Pragma: 'no-cache',
@@ -153,7 +154,20 @@ async function authenticatedUser(request: Request) {
   return { user, authorization };
 }
 
-async function profileForUser(userId: string): Promise<Profile> {
+async function profileForUser(userId: string, requestedAgencyId = ''): Promise<Profile> {
+  if (requestedAgencyId) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedAgencyId)) {
+      throw new HttpError(400, 'Agência de suporte inválida.');
+    }
+    const [staff, agencies] = await Promise.all([
+      supabaseRequest(`/rest/v1/platform_staff?id=eq.${encodeURIComponent(userId)}&role=eq.admin&is_active=eq.true&select=id&limit=1`),
+      supabaseRequest(`/rest/v1/agencies?id=eq.${encodeURIComponent(requestedAgencyId)}&status=eq.active&select=id&limit=1`)
+    ]);
+    if (!staff?.[0] || !agencies?.[0]) {
+      throw new HttpError(403, 'Somente um administrador DOT pode configurar integrações em suporte.');
+    }
+    return { id: userId, agency_id: requestedAgencyId, role: 'admin', is_active: true };
+  }
   const profiles = await supabaseRequest(
     `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,agency_id,role,is_active&limit=1`
   );
@@ -164,11 +178,12 @@ async function profileForUser(userId: string): Promise<Profile> {
 
 async function managerContext(request: Request) {
   const { user, authorization } = await authenticatedUser(request);
-  const profile = await profileForUser(user.id);
+  const requestedAgencyId = request.headers.get('x-doti-agency-id') || '';
+  const profile = await profileForUser(user.id, requestedAgencyId);
   if (!['owner', 'admin'].includes(profile.role)) {
     throw new HttpError(403, 'Somente proprietário ou administrador pode configurar o WhatsApp.');
   }
-  return { user, profile, authorization };
+  return { user, profile, authorization, requestedAgencyId };
 }
 
 async function assertWhatsappRollout(profile: Profile) {
@@ -476,11 +491,19 @@ async function synchronizeTemplates(profile: Profile, body: Record<string, unkno
   }
 }
 
-async function queueCampaign(authorization: string, body: Record<string, unknown>) {
+async function queueCampaign(
+  authorization: string,
+  body: Record<string, unknown>,
+  requestedAgencyId = ''
+) {
   const campaignId = requiredUuid(body, 'campaignId');
   const queuedId = await supabaseRequest(
     '/rest/v1/rpc/queue_meta_campaign',
-    { method: 'POST', body: JSON.stringify({ p_campaign_id: campaignId }) },
+    {
+      method: 'POST',
+      headers: requestedAgencyId ? { 'X-Doti-Agency-Id': requestedAgencyId } : {},
+      body: JSON.stringify({ p_campaign_id: campaignId })
+    },
     authorization
   );
   return { campaignId: queuedId, status: 'queued' };
@@ -603,7 +626,7 @@ Deno.serve(async request => {
   try {
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     action = String(body.action || '');
-    const { profile, authorization } = await managerContext(request);
+    const { profile, authorization, requestedAgencyId } = await managerContext(request);
     agencyId = profile.agency_id;
     await assertWhatsappRollout(profile);
     let result: unknown;
@@ -612,7 +635,7 @@ Deno.serve(async request => {
     else if (action === 'connection.test') result = await testConnection(profile, body);
     else if (action === 'templates.sync') result = await synchronizeTemplates(profile, body);
     if (action === 'campaign.queue') {
-      const queued = await queueCampaign(authorization, body);
+      const queued = await queueCampaign(authorization, body, requestedAgencyId);
       EdgeRuntime.waitUntil(processCampaign(queued.campaignId).catch(error => {
         technicalLog('error', 'meta.campaign.worker_failed', {
           campaignId: queued.campaignId,

@@ -390,6 +390,11 @@ deno_version = 2
 [functions.team-admin]
 verify_jwt = true
 
+[functions.platform-admin]
+# Todas as ações autenticadas validam o JWT dentro da função. A exceção é o
+# bootstrap único, protegido por secret e encerrado após o primeiro admin.
+verify_jwt = false
+
 [functions.meta-integration]
 verify_jwt = true
 

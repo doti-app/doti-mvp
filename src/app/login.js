@@ -136,6 +136,12 @@ function translateAuthError(error) {
   return error?.message || 'Não foi possível concluir a operação. Tente novamente.';
 }
 
+async function authenticatedDestination() {
+  const { data, error } = await supabase.rpc('get_account_context');
+  if (!error && data?.platform?.isActive) return '/doti/';
+  return '/';
+}
+
 async function handleLogin() {
   if (!validateEmail() || !validatePassword()) return;
   const { error } = await supabase.auth.signInWithPassword({
@@ -143,7 +149,7 @@ async function handleLogin() {
     password: passwordInput.value
   });
   if (error) throw error;
-  location.replace('../index.html');
+  location.replace(await authenticatedDestination());
 }
 
 async function handleSignup() {
@@ -167,7 +173,7 @@ async function handleSignup() {
   if (error) throw error;
 
   if (data.session) {
-    location.replace('../index.html');
+    location.replace(await authenticatedDestination());
     return;
   }
   form.reset();
@@ -198,11 +204,14 @@ async function handleInvite() {
   if (!validatePassword(true)) return;
   const { error } = await supabase.auth.updateUser({ password: passwordInput.value });
   if (error) throw error;
-  const { error: acceptError } = await supabase.functions.invoke('team-admin', {
-    body: { action: 'accept_invite' }
-  });
-  if (acceptError) throw acceptError;
-  location.replace('../index.html');
+  const { data: context } = await supabase.rpc('get_account_context');
+  if (!context?.platform?.isActive) {
+    const { error: acceptError } = await supabase.functions.invoke('team-admin', {
+      body: { action: 'accept_invite' }
+    });
+    if (acceptError) throw acceptError;
+  }
+  location.replace(context?.platform?.isActive ? '/doti/' : '/');
 }
 
 form.addEventListener('submit', async event => {
@@ -257,7 +266,7 @@ async function initialize() {
     supabase = await getSupabase();
     const { data: { session } } = await supabase.auth.getSession();
     if (session && !['reset', 'invite'].includes(mode)) {
-      location.replace('../index.html');
+      location.replace(await authenticatedDestination());
       return;
     }
     if (mode === 'invite' && !session) {
@@ -272,6 +281,9 @@ async function initialize() {
     }
     if (query.get('error') === 'disabled') {
       showStatus('Seu acesso foi desativado. Fale com o administrador da agência.', 'info');
+    }
+    if (query.get('error') === 'agency-archived') {
+      showStatus('Esta agência foi arquivada. Fale com o suporte DOT para restaurar o acesso.', 'info');
     }
   } catch (error) {
     showStatus(error.message, 'info');

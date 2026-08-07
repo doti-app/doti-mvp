@@ -1,3 +1,6 @@
+/// <reference path="../_shared/edge-runtime.d.ts" />
+export {};
+
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const LEGACY_PUBLIC_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
 const LEGACY_ADMIN_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -268,6 +271,10 @@ function assertCanManageMember(profile: Profile, member: { id: string; role: str
 }
 
 async function setAuthActive(memberId: string, isActive: boolean) {
+  const platformAccess = await adminRequest(
+    `/rest/v1/platform_staff?id=eq.${encodeURIComponent(memberId)}&is_active=eq.true&select=id&limit=1`
+  ).catch(() => []);
+  if (!isActive && platformAccess.length) return;
   await adminRequest(`/auth/v1/admin/users/${encodeURIComponent(memberId)}`, {
     method: 'PUT',
     body: JSON.stringify({ ban_duration: isActive ? 'none' : '876000h' })

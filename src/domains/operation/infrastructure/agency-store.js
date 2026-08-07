@@ -140,7 +140,8 @@ export function subscribeToAgencyChanges(agencyId, onChange) {
       channel = channel.on('postgres_changes', {
         event: '*',
         schema: 'public',
-        table
+        table,
+        filter: `agency_id=eq.${agencyId}`
       }, payload => {
         clearTimeout(timer);
         timer = setTimeout(() => onChange(payload), 450);

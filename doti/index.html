@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR" class="platform-auth-pending">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Portal interno DOT para acompanhar e apoiar todas as agências.">
+  <title>DOT — Portal interno</title>
+  <link rel="icon" href="/assets/doti.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/styles/platform.css">
+  <style>.platform-auth-pending body{visibility:hidden}</style>
+  <script src="/assets/vendor/supabase-2.57.4.js"></script>
+  <script type="module" src="/src/app/platform-entry.js"></script>
+</head>
+<body>
+  <div class="platform-shell">
+    <aside class="platform-sidebar">
+      <a class="platform-brand" href="/doti/" aria-label="Portal DOT">
+        <img src="/assets/doti-logo.png" alt="DOT">
+        <span>INTERNO</span>
+      </a>
+      <nav aria-label="Navegação do portal DOT">
+        <button class="active" type="button" data-platform-page="overview"><span>01</span>Visão macro</button>
+        <button type="button" data-platform-page="agencies"><span>02</span>Agências</button>
+        <button type="button" data-platform-page="accounts"><span>03</span>Todos os acessos</button>
+        <button type="button" data-platform-page="staff" data-admin-only><span>04</span>Equipe DOT</button>
+        <button type="button" data-platform-page="audit" data-admin-only><span>05</span>Auditoria</button>
+      </nav>
+      <div class="platform-sidebar-foot">
+        <button id="personalAgencyButton" type="button" hidden>Ir para minha agência <b>→</b></button>
+        <div class="platform-profile">
+          <div class="platform-avatar" id="platformAvatar">DT</div>
+          <div><strong id="platformUserName">Conta DOT</strong><small id="platformUserRole">Carregando…</small></div>
+          <button id="platformLogout" type="button" aria-label="Sair">↗</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="platform-main">
+      <header class="platform-topbar">
+        <div><small>AMBIENTE INTERNO DOT</small><strong id="platformPageLabel">Visão macro</strong></div>
+        <label class="platform-global-search">⌕ <input id="platformGlobalSearch" type="search" placeholder="Buscar agência ou responsável"></label>
+        <button class="platform-primary" id="newAgencyButton" type="button" data-admin-only>+ Nova agência</button>
+      </header>
+
+      <section class="platform-page active" id="platform-overview">
+        <header class="platform-page-head">
+          <div><p>OPERAÇÃO DOT</p><h1>O pulso de todas as agências.</h1><span>Usuários, projetos, prazos, bots e canais em uma única visão.</span></div>
+          <time id="platformUpdatedAt"></time>
+        </header>
+        <div class="platform-metrics" id="platformMetrics" aria-live="polite">
+          <article class="loading"></article><article class="loading"></article><article class="loading"></article><article class="loading"></article>
+        </div>
+        <div class="platform-overview-grid">
+          <article class="platform-panel platform-attention-panel">
+            <header><div><small>PRIORIDADES</small><h2>Agências que pedem atenção</h2></div><button type="button" data-go-page="agencies">Ver todas</button></header>
+            <div id="platformAttentionList" class="platform-loading-copy">Carregando indicadores…</div>
+          </article>
+          <article class="platform-panel platform-distribution-panel">
+            <header><div><small>DISTRIBUIÇÃO</small><h2>Saúde da base</h2></div></header>
+            <div id="platformDistribution" class="platform-loading-copy">Carregando base…</div>
+          </article>
+        </div>
+        <article class="platform-panel platform-recent-panel">
+          <header><div><small>ATIVIDADE RECENTE</small><h2>Agências em movimento</h2></div></header>
+          <div id="platformRecentAgencies" class="platform-agency-list"></div>
+        </article>
+      </section>
+
+      <section class="platform-page" id="platform-agencies">
+        <header class="platform-page-head compact">
+          <div><p>DIRETÓRIO</p><h1>Agências</h1><span>Entre no contexto de suporte ou administre o ciclo de vida de cada conta.</span></div>
+        </header>
+        <div class="platform-toolbar">
+          <label>⌕ <input id="agencySearch" type="search" placeholder="Buscar nome, proprietário ou e-mail"></label>
+          <select id="agencyStatusFilter" aria-label="Filtrar por status"><option value="all">Todos os status</option><option value="active">Ativas</option><option value="archived">Arquivadas</option></select>
+        </div>
+        <article class="platform-panel no-padding">
+          <div class="platform-table-head agency-columns"><span>Agência</span><span>Equipe</span><span>Operação</span><span>Canais</span><span>Status</span><span></span></div>
+          <div id="agencyDirectory" class="platform-table-body"><div class="platform-empty">Carregando agências…</div></div>
+        </article>
+      </section>
+
+      <section class="platform-page" id="platform-accounts">
+        <header class="platform-page-head compact">
+          <div><p>IDENTIDADES</p><h1>Todos os acessos</h1><span>Contas de clientes e da equipe DOT, sem expor credenciais ou sessões.</span></div>
+        </header>
+        <div class="platform-toolbar"><label>⌕ <input id="accountSearch" type="search" placeholder="Buscar nome ou e-mail"></label></div>
+        <article class="platform-panel no-padding">
+          <div class="platform-table-head account-columns"><span>Pessoa</span><span>Conta de agência</span><span>Perfil DOT</span><span>Último acesso</span><span>Status</span></div>
+          <div id="accountDirectory" class="platform-table-body"><div class="platform-empty">Abra esta área para carregar as contas.</div></div>
+        </article>
+      </section>
+
+      <section class="platform-page" id="platform-staff" data-admin-only>
+        <header class="platform-page-head compact with-action">
+          <div><p>TIME INTERNO</p><h1>Equipe DOT</h1><span>Controle quem acompanha, opera e administra a plataforma.</span></div>
+          <button class="platform-primary" id="inviteStaffButton" type="button">+ Convidar pessoa</button>
+        </header>
+        <div class="platform-role-guide">
+          <article><b>ADMIN</b><strong>Controle total</strong><span>Equipe DOT, agências, usuários e configurações.</span></article>
+          <article><b>MEMBRO</b><strong>Operação diária</strong><span>Clientes, projetos, entregáveis, tarefas e curadoria.</span></article>
+          <article><b>VISUALIZADOR</b><strong>Somente leitura</strong><span>Visão macro e consulta dentro das agências.</span></article>
+        </div>
+        <article class="platform-panel no-padding"><div id="staffDirectory" class="platform-table-body"><div class="platform-empty">Abra esta área para carregar a equipe DOT.</div></div></article>
+      </section>
+
+      <section class="platform-page" id="platform-audit" data-admin-only>
+        <header class="platform-page-head compact">
+          <div><p>RASTREABILIDADE</p><h1>Auditoria</h1><span>Entradas de suporte e alterações administrativas, sem conteúdo sensível.</span></div>
+        </header>
+        <article class="platform-panel no-padding">
+          <div class="platform-table-head audit-columns"><span>Quando</span><span>Ator</span><span>Agência</span><span>Ação</span><span>Recurso</span></div>
+          <div id="auditDirectory" class="platform-table-body"><div class="platform-empty">Abra esta área para carregar a auditoria.</div></div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <dialog class="platform-dialog" id="newAgencyDialog">
+    <form method="dialog" id="newAgencyForm">
+      <header><div><small>NOVA CONTA</small><h2>Criar agência</h2></div><button type="button" data-close-dialog aria-label="Fechar">×</button></header>
+      <div class="platform-dialog-body">
+        <label>Nome da agência<input name="agencyName" required minlength="2" maxlength="120" placeholder="Agência Exemplo"></label>
+        <div class="platform-form-grid"><label>Nome do proprietário<input name="ownerName" required minlength="2" maxlength="120" placeholder="Nome e sobrenome"></label><label>E-mail do proprietário<input name="ownerEmail" type="email" required placeholder="pessoa@agencia.com"></label></div>
+        <p>O proprietário receberá um convite para criar a senha e ativar a agência.</p>
+        <div class="platform-form-status" role="alert"></div>
+      </div>
+      <footer><button type="button" class="platform-secondary" data-close-dialog>Cancelar</button><button type="submit" class="platform-primary">Criar e convidar →</button></footer>
+    </form>
+  </dialog>
+
+  <dialog class="platform-dialog" id="inviteStaffDialog">
+    <form method="dialog" id="inviteStaffForm">
+      <header><div><small>EQUIPE DOT</small><h2>Convidar pessoa</h2></div><button type="button" data-close-dialog aria-label="Fechar">×</button></header>
+      <div class="platform-dialog-body">
+        <div class="platform-form-grid"><label>Nome completo<input name="fullName" required minlength="2" maxlength="120"></label><label>E-mail<input name="email" type="email" required></label></div>
+        <label>Nível DOT<select name="role"><option value="member">Membro — operação diária</option><option value="viewer">Visualizador — somente leitura</option><option value="admin">Administrador — controle total</option></select></label>
+        <div class="platform-form-status" role="alert"></div>
+      </div>
+      <footer><button type="button" class="platform-secondary" data-close-dialog>Cancelar</button><button type="submit" class="platform-primary">Enviar convite →</button></footer>
+    </form>
+  </dialog>
+
+  <dialog class="platform-dialog wide" id="agencyDialog"><div id="agencyDialogContent"></div></dialog>
+  <dialog class="platform-dialog wide" id="agencyTeamDialog"><div id="agencyTeamDialogContent"></div></dialog>
+  <div class="platform-toast" id="platformToast" role="status"><b>✓</b><div><strong></strong><span></span></div></div>
+</body>
+</html>

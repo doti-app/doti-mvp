@@ -38,7 +38,7 @@ for (const legacy of ['app.js', 'core', 'domains']) {
   if (existsSync(join(root, legacy))) failures.push(`${legacy} é uma localização legada e não deve conter código-fonte.`);
 }
 
-for (const entry of ['index.html', 'dot-admin/index.html']) {
+for (const entry of ['index.html', 'dot-admin/index.html', 'doti/index.html']) {
   const source = readFileSync(join(root, entry), 'utf8');
   if (/\?v=\d+/.test(source)) failures.push(`${entry} contém cache-busting manual.`);
 }
