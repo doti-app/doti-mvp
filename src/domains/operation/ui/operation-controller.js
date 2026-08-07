@@ -39,6 +39,7 @@ import {
 import { createModalService } from '../../../shared/ui/modal-service.js';
 import { createOperationPages } from './pages.js';
 import { renderDashboardView } from './dashboard-view.js';
+import { createMetricIcon } from './metric-icons.js';
 import { analyzeVirgulinhaCommand } from '../domain/virgulinha-engine.mjs';
 
 /**
@@ -580,10 +581,28 @@ function renderDemands() {
   clientFilterElement.value = selectedClient;
   const counts = { planning: 0, production: 0, approval: 0, done: 0 };
   state.deliverables.forEach(item => counts[macroStatus(item)]++);
-  document.getElementById('operationSummary').innerHTML = [
-    [state.projects.length, 'projetos'], [state.deliverables.length, 'entregáveis'],
-    [counts.approval, 'em aprovação'], [counts.done, 'concluídos']
-  ].map(([value, label], index) => `<article><span class="summary-icon ${['yellow-bg', 'blue-bg', 'violet-bg', 'mint-bg'][index]}">${['□', '◇', '◷', '✓'][index]}</span><div><strong>${value}</strong><small>${label}</small></div></article>`).join('');
+  /** @type {Array<[number, string, string, SVGSVGElement | string]>} */
+  const summaryData = [
+    [state.projects.length, 'projetos', 'yellow-bg', createMetricIcon('projects', document)],
+    [state.deliverables.length, 'entregáveis', 'blue-bg', createMetricIcon('deliverables', document)],
+    [counts.approval, 'em aprovação', 'violet-bg', createMetricIcon('approval', document)],
+    [counts.done, 'concluídos', 'mint-bg', '✓']
+  ];
+  document.getElementById('operationSummary').replaceChildren(...summaryData.map(([value, label, color, icon]) => {
+    const article = document.createElement('article');
+    const iconNode = document.createElement('span');
+    iconNode.className = `summary-icon ${color}`;
+    if (icon instanceof Node) iconNode.appendChild(icon);
+    else iconNode.textContent = icon;
+    const copy = document.createElement('div');
+    const count = document.createElement('strong');
+    count.textContent = String(value);
+    const labelNode = document.createElement('small');
+    labelNode.textContent = label;
+    copy.append(count, labelNode);
+    article.append(iconNode, copy);
+    return article;
+  }));
 
   const search = normalize(document.getElementById('demandSearch').value);
   const filter = document.getElementById('statusFilter').value;

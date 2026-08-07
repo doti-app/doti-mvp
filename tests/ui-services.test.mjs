@@ -67,6 +67,7 @@ const elementsById = new Map();
 globalThis.document = {
   body: new FakeElement('body'),
   createElement: tagName => new FakeElement(tagName),
+  createElementNS: (_namespace, tagName) => new FakeElement(tagName),
   createTextNode: value => new FakeText(value),
   getElementById: id => elementsById.get(id) || null
 };
@@ -120,6 +121,9 @@ test('dashboard renderiza dados dinâmicos por nós DOM seguros', () => {
     initials: () => 'CP'
   });
   assert.equal(elementsById.get('dashboardMetrics').children.length, 4);
+  const metricIcons = elementsById.get('dashboardMetrics').children.slice(0, 3).map(metric => metric.children[0].children[0]);
+  assert.deepEqual(metricIcons.map(icon => icon.tagName), ['SVG', 'SVG', 'SVG']);
+  assert.ok(metricIcons.every(icon => icon.attributes.get('aria-hidden') === 'true'));
   const row = elementsById.get('recentProjects').children[0];
   assert.equal(row.children[1].children[0].textContent, '<cliente>');
   assert.equal(row.children[1].children[1].textContent, '<projeto>');

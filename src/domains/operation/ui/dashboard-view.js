@@ -1,6 +1,7 @@
 // @ts-check
 
 import { append, element, replaceChildren } from '../../../shared/dom.js';
+import { createMetricIcon } from './metric-icons.js';
 
 /**
  * Safe renderer for the dashboard. All user-controlled values are assigned to
@@ -38,13 +39,14 @@ export function renderDashboardView(context) {
     : 'Nenhuma demanda cadastrada. Crie seu primeiro projeto para começar.';
 
   const metricData = [
-    ['□', state.projects.length, 'Projetos', 'yellow'],
-    ['↝', active.length, 'Em andamento', 'blue'],
-    ['◷', approvals.length, 'Em aprovação', 'violet'],
+    [createMetricIcon('projects'), state.projects.length, 'Projetos', 'yellow'],
+    [createMetricIcon('active'), active.length, 'Em andamento', 'blue'],
+    [createMetricIcon('approval'), approvals.length, 'Em aprovação', 'violet'],
     ['✓', completed.length, 'Concluídos', 'green']
   ];
   replaceChildren(metrics, ...metricData.map(([icon, value, label, color]) => {
-    const iconNode = element('span', { className: `metric-icon ${color}`, text: String(icon) });
+    const iconNode = element('span', { className: `metric-icon ${color}` });
+    append(iconNode, icon);
     const copy = element('div');
     append(copy,
       element('small', { text: String(label) }),
