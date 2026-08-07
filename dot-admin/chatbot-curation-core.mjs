@@ -38,18 +38,29 @@ export function filterInteractions(rows, { status = 'all', search = '' } = {}) {
   });
 }
 
+function interactionDayKey(occurredAt, timeZone = 'America/Sao_Paulo') {
+  const date = validDate(occurredAt) ? new Date(occurredAt) : new Date();
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+export function filterInteractionsByDate(rows, { from = '', to = '' } = {}, timeZone = 'America/Sao_Paulo') {
+  return (rows || []).filter(row => {
+    const key = interactionDayKey(row.occurred_at, timeZone);
+    return (!from || key >= from) && (!to || key <= to);
+  });
+}
+
 export function groupInteractionsByDay(rows, timeZone = 'America/Sao_Paulo') {
   const groups = new Map();
   rows.forEach(row => {
-    const date = validDate(row.occurred_at) ? new Date(row.occurred_at) : new Date();
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    }).formatToParts(date);
-    const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
-    const key = `${values.year}-${values.month}-${values.day}`;
+    const key = interactionDayKey(row.occurred_at, timeZone);
     if (!groups.has(key)) groups.set(key, { key, interactions: [], users: new Set(), sessions: new Set() });
     const group = groups.get(key);
     group.interactions.push(row);
@@ -67,6 +78,10 @@ export function groupInteractionsByDay(rows, timeZone = 'America/Sao_Paulo') {
     }));
 }
 
+export function filterDayGroupsByDate(groups, { from = '', to = '' } = {}) {
+  return (groups || []).filter(group => (!from || group.key >= from) && (!to || group.key <= to));
+}
+
 export function summarizeInteractions(rows) {
   const result = { total: rows.length, pending: 0, approved: 0, needs_review: 0, rejected: 0, average_ms: null };
   let responseTotal = 0;
@@ -80,6 +95,28 @@ export function summarizeInteractions(rows) {
   });
   result.average_ms = responseCount ? Math.round(responseTotal / responseCount) : null;
   return result;
+}
+
+export function summarizePanelMetrics(rows) {
+  const users = new Set();
+  const attendances = new Set();
+  let responseTotal = 0;
+  let responseCount = 0;
+  (rows || []).forEach(row => {
+    if (row.external_user_id) users.add(String(row.external_user_id));
+    const attendanceKey = row.external_session_id || row.external_user_id || row.id;
+    if (attendanceKey) attendances.add(String(attendanceKey));
+    if (row.response_time_ms != null && Number.isFinite(Number(row.response_time_ms))) {
+      responseTotal += Number(row.response_time_ms);
+      responseCount += 1;
+    }
+  });
+  return {
+    attendances: attendances.size,
+    users: users.size,
+    interactions: (rows || []).length,
+    average_ms: responseCount ? Math.round(responseTotal / responseCount) : null
+  };
 }
 
 export function buildReviewPatch({ status, rating, categories, notes }, reviewerId, now = new Date()) {
@@ -98,7 +135,14 @@ export function buildReviewPatch({ status, rating, categories, notes }, reviewer
 export function generateIntegrationCredentials() {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
   const token = [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
-  return { sourceKey: `virgulinha_${token.slice(0, 16)}`, secret: `doti_wh_${token}` };
+  return { sourceKey: `doti_bot_${token.slice(0, 16)}`, secret: `doti_wh_${token}` };
+}
+
+export function selectBotInteractions(rows, integrations, botId) {
+  const integrationIds = new Set(
+    integrations.filter(integration => integration.bot_id === botId).map(integration => integration.id)
+  );
+  return rows.filter(row => integrationIds.has(row.integration_id));
 }
 
 export async function sha256(value) {

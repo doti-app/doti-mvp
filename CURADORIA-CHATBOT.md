@@ -1,4 +1,4 @@
-# Curadoria do Virgulinha no Doti
+# Controle e curadoria de bots no Doti
 
 ## Arquitetura
 
@@ -10,15 +10,25 @@ AI Agent → Respond to Webhook
                  └→ HTTP Request → Supabase Edge Function → Doti / Curadoria
 ```
 
-A função valida as credenciais da integração, normaliza os campos e grava cada evento uma única vez. A chave `event_id` evita duplicações caso o n8n repita uma execução.
+A função valida as credenciais da integração, identifica automaticamente o bot conectado, normaliza os campos e grava cada evento uma única vez. A chave `event_id` evita duplicações caso o n8n repita uma execução.
+
+O cadastro é separado em três níveis:
+
+- `chatbots`: identidade do Virgulinha, Camilinha e dos próximos bots, com vínculo opcional a um cliente;
+- `chatbot_integrations`: uma ou mais conexões de cada bot com n8n, site, WhatsApp ou outros canais;
+- `chatbot_interactions`: perguntas e respostas recebidas por cada conexão.
+
+Essa separação permite adicionar bots e canais sem criar novas páginas ou duplicar a lógica de curadoria.
 
 ## Configuração no Doti
 
 1. Entre como proprietário ou administrador.
-2. Abra **Curadoria** e clique em **Conectar n8n**.
-3. Clique em **Criar conexão**.
-4. Copie a URL, o `x-doti-source-key` e o `x-doti-webhook-secret`. O segredo só é mostrado naquele momento.
-5. No n8n, guarde o segredo como credencial/variável; não o escreva em um nó público nem em logs.
+2. Abra **Bots**.
+3. Para um bot novo, clique em **Novo bot**, informe o nome e selecione o cliente, quando aplicável.
+4. Abra o bot escolhido e clique em **Conectar n8n**.
+5. Clique em **Criar conexão**.
+6. Copie a URL, o `x-doti-source-key` e o `x-doti-webhook-secret`. O segredo só é mostrado naquele momento.
+7. No n8n, guarde o segredo como credencial/variável; não o escreva em um nó público nem em logs.
 
 ## Nó HTTP Request no n8n
 
@@ -40,17 +50,16 @@ Body sugerido:
   "answer": "={{ $json.resposta }}",
   "channel": "={{ $json.canal || 'web' }}",
   "user_id": "={{ $json.id_usuario }}",
-  "session_id": "={{ $json.id_atendimento || $json.session_id }}",
   "url": "={{ $json.url }}",
   "response_time_ms": "={{ $json.tempo_resposta_ms || Math.round(Number(String($json.tempo_resposta || 0).replace(',', '.')) * 1000) }}"
 }
 ```
 
-Se os nomes de saída do AI Agent forem diferentes, ajuste somente as expressões à direita. `event_id`, `question` e `answer` são obrigatórios. `session_id` deve receber o identificador do atendimento/sessão para que o histórico diário contabilize sessões sem misturar usuários recorrentes.
+Se os nomes de saída do AI Agent forem diferentes, ajuste somente as expressões à direita. `event_id`, `question` e `answer` são obrigatórios.
 
 ## Desenvolvimento local
 
-Com `DOTI_LOCAL_MODE=true`, a página usa três conversas de demonstração e salva revisões no `localStorage`. Assim a interface pode ser validada sem escrever no banco remoto.
+Com `DOTI_LOCAL_MODE=true`, a página mostra Virgulinha e Camilinha com conversas de demonstração e salva cadastros, conexões e revisões no `localStorage`. Assim a interface pode ser validada sem escrever no banco remoto.
 
 ```powershell
 npm test

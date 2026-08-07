@@ -13,7 +13,7 @@ import {
   uploadLegacyFiles,
   uploadOperationFile,
   waitForOperationContext
-} from '/dot-admin/operation-store.js?v=4';
+} from '/dot-admin/operation-store.js?v=6';
 import { analyzeVirgulinhaCommand } from '/dot-admin/virgulinha-engine.mjs?v=2';
 
 const STORAGE_KEY = 'doti-agency-live-v3';

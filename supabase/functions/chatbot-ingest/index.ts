@@ -91,11 +91,20 @@ Deno.serve(async request => {
 
   const { data: integration, error: integrationError } = await admin
     .from("chatbot_integrations")
-    .select("id, agency_id, secret_hash, is_active")
+    .select("id, agency_id, bot_id, secret_hash, is_active")
     .eq("source_key", sourceKey)
     .maybeSingle();
   const receivedHash = await sha256(webhookSecret);
   if (integrationError || !integration || !integration.is_active || !safeEqual(receivedHash, integration.secret_hash)) {
+    return response(401, { error: "invalid_credentials" });
+  }
+  const { data: bot, error: botError } = await admin
+    .from("chatbots")
+    .select("is_active")
+    .eq("id", integration.bot_id)
+    .eq("agency_id", integration.agency_id)
+    .maybeSingle();
+  if (botError || !bot?.is_active) {
     return response(401, { error: "invalid_credentials" });
   }
 
