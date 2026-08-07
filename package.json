@@ -4,10 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "node local-server.js",
-    "test": "node --test tests/*.test.mjs",
-    "test:curadoria": "node --test tests/chatbot-curation.test.mjs"
+    "test": "node --test tests/*.test.mjs dot-admin/*.test.mjs scripts/*.test.mjs supabase/functions/_shared/*.test.mjs",
+    "test:curadoria": "node --test tests/chatbot-curation.test.mjs",
+    "check:types": "tsc --project jsconfig.json"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.57.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
   }
 }
