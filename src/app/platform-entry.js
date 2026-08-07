@@ -188,7 +188,9 @@ async function start() {
     state.context = context; const person = context.platform; byId('platformAvatar').textContent = person.fullName.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
     byId('platformUserName').textContent = person.fullName; byId('platformUserRole').textContent = roles[person.role] || person.role; if (context.personalAgency?.status === 'active') byId('personalAgencyButton').hidden = false;
     if (!admin()) document.querySelectorAll('[data-admin-only]').forEach(element => { element.hidden = true; });
-    bindEvents(); await loadOverview(); document.documentElement.classList.remove('platform-auth-pending');
+    bindEvents(); document.documentElement.classList.remove('platform-auth-pending');
+    try { await loadOverview(); }
+    catch (error) { console.error(error); toast('Não foi possível carregar o portal DOT', error.message); }
   } catch (error) { console.error(error); location.replace('/dot-admin/?reason=unauthorized'); }
 }
 

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap;
-select plan(31);
+select plan(34);
 
 insert into auth.users (id, email)
 values
@@ -96,6 +96,27 @@ select has_index(
   'public', 'platform_staff_invitations',
   'platform_staff_invitations_invited_by_idx',
   'platform invitations have a covering inviter index'
+);
+select ok(
+  has_table_privilege('service_role', 'public.projects', 'SELECT')
+    and not has_table_privilege('service_role', 'public.projects', 'INSERT')
+    and not has_table_privilege('service_role', 'public.projects', 'UPDATE')
+    and not has_table_privilege('service_role', 'public.projects', 'DELETE'),
+  'platform overview can read projects without service-role write access'
+);
+select ok(
+  has_table_privilege('service_role', 'public.deliverables', 'SELECT')
+    and not has_table_privilege('service_role', 'public.deliverables', 'INSERT')
+    and not has_table_privilege('service_role', 'public.deliverables', 'UPDATE')
+    and not has_table_privilege('service_role', 'public.deliverables', 'DELETE'),
+  'platform overview can read deliverables without service-role write access'
+);
+select ok(
+  has_table_privilege('service_role', 'public.activity_events', 'SELECT')
+    and not has_table_privilege('service_role', 'public.activity_events', 'INSERT')
+    and not has_table_privilege('service_role', 'public.activity_events', 'UPDATE')
+    and not has_table_privilege('service_role', 'public.activity_events', 'DELETE'),
+  'platform overview can read activity events without service-role write access'
 );
 
 set local role authenticated;
