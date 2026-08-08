@@ -25,3 +25,12 @@ test('platform operational failures do not redirect an authenticated user', () =
   assert.match(entry, /try \{ await loadOverview\(\); \}\s*catch \(error\) \{ console\.error\(error\); toast\('Não foi possível carregar o portal DOT', error\.message\); \}/);
   assert.match(entry, /location\.replace\('\/dot-admin\/\?reason=unauthorized'\)/);
 });
+
+test('DOTI staff can return from their personal agency to the internal portal', () => {
+  const page = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const session = fs.readFileSync(path.join(root, 'src/shared/auth/session.js'), 'utf8');
+
+  assert.match(page, /id="dotiPortalReturn" href="\/doti\/"[^>]*hidden/);
+  assert.match(session, /button\.hidden = !platformStaff\?\.isActive \|\| supportMode;/);
+  assert.match(session, /configurePlatformReturn\(platformStaff, supportMode\);/);
+});

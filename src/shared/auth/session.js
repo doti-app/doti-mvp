@@ -92,6 +92,12 @@ function addSupportBanner(agency, platformStaff) {
   document.body.prepend(banner);
 }
 
+function configurePlatformReturn(platformStaff, supportMode) {
+  const button = document.getElementById('dotiPortalReturn');
+  if (!button) return;
+  button.hidden = !platformStaff?.isActive || supportMode;
+}
+
 async function accountContextFor(supabase) {
   const { data, error } = await supabase.rpc('get_account_context');
   if (error) {
@@ -236,6 +242,7 @@ async function protectPanel() {
 
     document.body.dataset.userRole = profile.role;
     document.body.dataset.supportMode = String(supportMode);
+    configurePlatformReturn(platformStaff, supportMode);
     if (supportMode) addSupportBanner(supportAgency, platformStaff);
     authContext = {
       supabase,
