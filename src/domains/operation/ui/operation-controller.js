@@ -28,6 +28,7 @@ import { createOperationFiles } from '../domain/files.js';
 import { createOperationPersistence } from '../domain/persistence.js';
 import { recordActivity } from '../domain/commands.js';
 import {
+  canMoveDeliverableToStep as selectCanMoveDeliverableToStep,
   compareDeliverablesByDate as compareDeliverables,
   currentStep as selectCurrentStep,
   dateIsPast as selectDateIsPast,
@@ -1084,6 +1085,7 @@ function openDeliverable(id) {
   const milestone = nextStepDeadline(deliverable);
   const isClientApprovalStep = deliverable.status !== 'done' && group.isClientGroup === true;
   const isApprovalStep = !isClientApprovalStep && deliverable.status !== 'done' && deliverable.stepIndex > 0 && macroStatus(deliverable) === 'approval';
+  const canMoveToStep = index => selectCanMoveDeliverableToStep(deliverable, index, state.groups);
   openModal(deliverable.name, `
     <div class="deliverable-context"><span class="tag ${deliverable.color}">${escapeHtml(deliverable.category)}</span><strong>${escapeHtml(project.client)}</strong><span>${escapeHtml(project.name)}</span></div>
     <div class="stage-focus"><small>ETAPA ATUAL · ${deliverable.stepIndex + 1} DE ${deliverable.steps.length}</small><h3>${escapeHtml(step.name)}</h3><p>Responsável: <strong>${escapeHtml(group.name)}</strong>${step.due ? ` · Prazo: <strong>${formatDate(step.due)}</strong>` : ''}</p></div>
@@ -1097,8 +1099,17 @@ function openDeliverable(id) {
     ${renderDeliverableAttachments(deliverable)}
     ${renderApprovalDecisionHistory(deliverable)}
     ${isClientApprovalStep ? '<div class="approval-readonly-note">Esta etapa exige uma decisão auditada. Use a área <strong>Aprovações</strong> para aprovar ou solicitar ajustes.</div>' : ''}
-    <div class="schedule-head"><div><span class="modal-section-title">CRONOGRAMA DAS ETAPAS</span><small>Datas opcionais — preencha somente os marcos que precisar</small></div>${milestone ? `<b>Próximo: ${escapeHtml(milestone.step.name)} · ${formatDate(milestone.due)}</b>` : '<b>Nenhuma data definida</b>'}</div>
-    <div class="step-timeline compact-timeline">${deliverable.steps.map((item, index) => `<div class="step-line ${index < deliverable.stepIndex ? 'complete' : index === deliverable.stepIndex ? 'active' : ''} ${item.due && dateIsPast(item.due) && index >= deliverable.stepIndex && deliverable.status !== 'done' ? 'late-step' : ''}"><i>${index < deliverable.stepIndex ? '✓' : index + 1}</i><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(groupById(item.groupId).name)}</small></div><label class="step-date-control"><span>${item.due ? 'Prazo' : 'Sem data'}</span><input type="date" data-step-date="${item.id}" value="${escapeAttr(item.due || '')}" aria-label="Prazo de ${escapeAttr(item.name)}"></label></div>`).join('')}</div>
+    <div class="schedule-head"><div><span class="modal-section-title">CRONOGRAMA DAS ETAPAS</span><small>${isClientApprovalStep ? 'Esta aprovação é decidida na área Aprovações.' : 'Clique em uma etapa para mover a demanda. Etapas de cliente continuam protegidas.'}</small></div>${milestone ? `<b>Próximo: ${escapeHtml(milestone.step.name)} · ${formatDate(milestone.due)}</b>` : '<b>Nenhuma data definida</b>'}</div>
+    <div class="step-timeline compact-timeline">${deliverable.steps.map((item, index) => {
+      const moveAllowed = canMoveToStep(index);
+      const groupName = groupById(item.groupId).name;
+      const moveHint = index === deliverable.stepIndex
+        ? 'Etapa atual'
+        : moveAllowed
+          ? `Mover para ${item.name}`
+          : 'Esta etapa exige a decisão registrada do cliente';
+      return `<div class="step-line ${index < deliverable.stepIndex ? 'complete' : index === deliverable.stepIndex ? 'active' : ''} ${item.due && dateIsPast(item.due) && index >= deliverable.stepIndex && deliverable.status !== 'done' ? 'late-step' : ''}"><button type="button" class="step-jump-button" data-move-deliverable-step="${index}" ${moveAllowed ? '' : 'disabled'} title="${escapeAttr(moveHint)}" aria-label="${escapeAttr(moveHint)}"><i>${index < deliverable.stepIndex ? '✓' : index + 1}</i><span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(groupName)}</small></span></button><label class="step-date-control"><span>${item.due ? 'Prazo' : 'Sem data'}</span><input type="date" data-step-date="${item.id}" value="${escapeAttr(item.due || '')}" aria-label="Prazo de ${escapeAttr(item.name)}"></label></div>`;
+    }).join('')}</div>
     <div class="deliverable-secondary-actions"><button type="button" data-edit-deliverable>Editar entregável</button><button type="button" class="danger-link" data-delete-deliverable>Excluir entregável</button></div>
   `, form => {
     step.note = field(form, 'note').trim();
@@ -1141,6 +1152,28 @@ function openDeliverable(id) {
       form.querySelector(':scope > footer').insertBefore(rejectButton, form.querySelector(':scope > footer .primary-btn'));
       rejectButton.onclick = () => openRejectionDialog(deliverable, project, step, form);
     }
+    form.querySelectorAll('[data-move-deliverable-step]').forEach(button => {
+      button.addEventListener('click', () => {
+        const targetIndex = Number(button.dataset.moveDeliverableStep);
+        if (!canMoveToStep(targetIndex)) return;
+        const previousStep = currentStep(deliverable);
+        const previousStepIndex = deliverable.stepIndex;
+        const targetStep = deliverable.steps[targetIndex];
+        step.note = field(form, 'note').trim();
+        syncDeliverableLinks(deliverable, step.note, step);
+        deliverable.stepIndex = targetIndex;
+        deliverable.status = 'active';
+        project.updatedAt = new Date().toISOString();
+        logActivity(
+          targetIndex < previousStepIndex ? 'Etapa retomada' : 'Etapa alterada',
+          `${deliverable.name}: ${previousStep.name} → ${targetStep.name}`
+        );
+        saveState();
+        closeModal();
+        openDeliverable(deliverable.id);
+        notify('Etapa atualizada', `Agora em ${targetStep.name}.`);
+      });
+    });
     const noteInput = form.elements.namedItem('note');
     const noteEditor = form.querySelector('[data-note-editor]');
     const observationLinks = form.querySelector('[data-observation-links]');

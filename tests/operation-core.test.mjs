@@ -4,7 +4,7 @@ import test from 'node:test';
 import { createOperationFiles } from '../src/domains/operation/domain/files.js';
 import { recordActivity } from '../src/domains/operation/domain/commands.js';
 import { createOperationPersistence } from '../src/domains/operation/domain/persistence.js';
-import { effectiveDeadline, isClientActionStep, macroStatus, overdueDeadline } from '../src/domains/operation/domain/selectors.js';
+import { canMoveDeliverableToStep, effectiveDeadline, isClientActionStep, macroStatus, overdueDeadline } from '../src/domains/operation/domain/selectors.js';
 import { createEmptyOperationState, normalizeOperationState } from '../src/domains/operation/domain/state.js';
 
 test('normaliza snapshots legados sem perder a referência do cliente ou as etapas', () => {
@@ -77,6 +77,30 @@ test('identifica o grupo do cliente pela marcação explícita e normaliza o leg
     workflows: [], clients: [], projects: [], deliverables: [], activity: []
   });
   assert.equal(legacy.groups[0].isClientGroup, true);
+});
+
+test('permite reposicionar a demanda sem pular a aprovação do cliente', () => {
+  const groups = [
+    { id: 'atendimento', isClientGroup: false },
+    { id: 'cliente', isClientGroup: true },
+    { id: 'design', isClientGroup: false }
+  ];
+  const deliverable = {
+    stepIndex: 1,
+    steps: [
+      { name: 'Briefing', groupId: 'atendimento' },
+      { name: 'Criação', groupId: 'design' },
+      { name: 'Aprovação do cliente', groupId: 'cliente' },
+      { name: 'Entrega', groupId: 'atendimento' }
+    ]
+  };
+  assert.equal(canMoveDeliverableToStep(deliverable, 0, groups), true);
+  assert.equal(canMoveDeliverableToStep(deliverable, 2, groups), false);
+  assert.equal(canMoveDeliverableToStep(deliverable, 3, groups), false);
+
+  deliverable.stepIndex = 3;
+  assert.equal(canMoveDeliverableToStep(deliverable, 1, groups), true);
+  assert.equal(canMoveDeliverableToStep(deliverable, 2, groups), false);
 });
 
 test('serializa persistência e descarta alterações pendentes após um erro', async () => {

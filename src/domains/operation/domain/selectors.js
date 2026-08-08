@@ -48,6 +48,26 @@ export function isClientActionStep(step, groups = []) {
     || groups.some(group => group.id === step?.groupId && group.isClientGroup === true);
 }
 
+/**
+ * Manual moves are useful for correcting a card's position, but can never
+ * bypass the audited customer approval stage.
+ * @param {any} deliverable
+ * @param {number} targetIndex
+ * @param {any[]} [groups]
+ */
+export function canMoveDeliverableToStep(deliverable, targetIndex, groups = []) {
+  const currentIndex = Number(deliverable?.stepIndex);
+  const steps = deliverable?.steps || [];
+  if (!Number.isInteger(currentIndex)
+    || !Number.isInteger(targetIndex)
+    || targetIndex < 0
+    || targetIndex >= steps.length
+    || targetIndex === currentIndex) return false;
+  if (isClientActionStep(steps[currentIndex], groups) || isClientActionStep(steps[targetIndex], groups)) return false;
+  return targetIndex < currentIndex
+    || !steps.slice(currentIndex + 1, targetIndex + 1).some(step => isClientActionStep(step, groups));
+}
+
 /** @param {any} deliverable @param {any[]} [groups] */
 export function macroStatus(deliverable, groups = []) {
   if (deliverable.status === 'done') return 'done';
