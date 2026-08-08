@@ -102,6 +102,32 @@ test('reprovação exige comentário, retorna uma etapa e cria a tarefa de ajust
   assert.equal(deliverable.steps[0].tasks[0].title, 'Aplicar ajustes solicitados na aprovação');
 });
 
+test('aprovação pula Ajustes e reprovação a direciona para essa etapa', async t => {
+  const fixture = operationFixture();
+  fixture.deliverables[0].steps.splice(2, 0,
+    { id: 'etapa-a-ajustes', name: 'Ajustes', groupId: 'g-producao', tasks: [] }
+  );
+  const previousStorage = globalThis.localStorage;
+  globalThis.localStorage = memoryStorage(fixture);
+  t.after(() => { globalThis.localStorage = previousStorage; });
+
+  const store = createApprovalStore(localAuth('client', 'cliente-a'));
+  await store.decide({
+    deliverableId: 'entrega-a', stepId: 'etapa-a-aprovacao', decision: 'approved', comment: ''
+  });
+  let persisted = JSON.parse(globalThis.localStorage.getItem(STORAGE_KEY));
+  assert.equal(persisted.deliverables[0].stepIndex, 3);
+  assert.equal(persisted.deliverables[0].steps[3].name, 'Entrega');
+
+  globalThis.localStorage = memoryStorage(fixture);
+  await store.decide({
+    deliverableId: 'entrega-a', stepId: 'etapa-a-aprovacao', decision: 'rejected', comment: 'Refazer a arte'
+  });
+  persisted = JSON.parse(globalThis.localStorage.getItem(STORAGE_KEY));
+  assert.equal(persisted.deliverables[0].stepIndex, 2);
+  assert.equal(persisted.deliverables[0].steps[2].name, 'Ajustes');
+});
+
 test('member acompanha a fila, mas não registra decisões', async t => {
   const previousStorage = globalThis.localStorage;
   globalThis.localStorage = memoryStorage(operationFixture());

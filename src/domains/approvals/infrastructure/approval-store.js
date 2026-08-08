@@ -25,6 +25,11 @@ function localClientGroupIds(state) {
     .map(group => group.id));
 }
 
+/** @param {any} step */
+function isAdjustmentStep(step) {
+  return /\bajustes?\b/.test(normalized(step?.name));
+}
+
 /** @param {any} state @param {any} auth */
 function localQueue(state, auth) {
   const clientGroupIds = localClientGroupIds(state);
@@ -120,9 +125,10 @@ export function createApprovalStore(auth) {
       if (input.decision === 'rejected' && !comment) {
         throw new Error('Explique os ajustes necessários antes de reprovar.');
       }
+      const nextStepIsAdjustment = isAdjustmentStep(deliverable.steps?.[deliverable.stepIndex + 1]);
       const target = input.decision === 'rejected'
-        ? deliverable.stepIndex - 1
-        : deliverable.stepIndex + 1;
+        ? (nextStepIsAdjustment ? deliverable.stepIndex + 1 : deliverable.stepIndex - 1)
+        : deliverable.stepIndex + 1 + (nextStepIsAdjustment ? 1 : 0);
       if (input.decision === 'rejected' && target < 0) {
         throw new Error('Não existe uma etapa anterior para receber os ajustes.');
       }
