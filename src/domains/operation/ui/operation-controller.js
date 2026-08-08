@@ -76,6 +76,8 @@ let migrationPending = false;
 let realtimeRefreshPending = false;
 let ignoreRealtimeUntil = 0;
 let unsubscribeRealtime;
+let unsubscribeOperationFreshness;
+let operationRefreshInFlight = false;
 let demandView = 'board';
 let flowView = 'models';
 let selectedClientWorkspaceId = null;
@@ -1802,11 +1804,15 @@ function closeModal() {
   modalService.close();
 }
 async function refreshOperationFromServer() {
+  if (operationRefreshInFlight) return;
+  operationRefreshInFlight = true;
   realtimeRefreshPending = false;
   try {
     applyLoadedState(await loadAgencyState());
   } catch (_) {
     notify('Não foi possível sincronizar', 'Tente novamente em instantes.', '!');
+  } finally {
+    operationRefreshInFlight = false;
   }
 }
 function confirmAction(title, message, action) {
@@ -2115,6 +2121,7 @@ function showLegacyMigration(profile) {
       migrationPending = false;
       applyLoadedState(loaded);
       bindRealtime(profile.agency_id);
+      bindOperationFreshness();
       document.querySelector('.storage-note span').textContent = 'Dados protegidos e compartilhados';
       modal.remove();
       notify(
@@ -2154,6 +2161,24 @@ function bindRealtime(agencyId) {
   });
 }
 
+function bindOperationFreshness() {
+  unsubscribeOperationFreshness?.();
+  const refreshWhenReturning = () => {
+    if (document.visibilityState === 'hidden'
+      || !operationReady
+      || operationPersistence.isRunning
+      || operationPersistence.hasPending
+      || document.querySelector('.doti-modal, .attachment-preview-layer')) return;
+    void refreshOperationFromServer();
+  };
+  window.addEventListener('focus', refreshWhenReturning);
+  document.addEventListener('visibilitychange', refreshWhenReturning);
+  unsubscribeOperationFreshness = () => {
+    window.removeEventListener('focus', refreshWhenReturning);
+    document.removeEventListener('visibilitychange', refreshWhenReturning);
+  };
+}
+
 function applyOperationRole(profile) {
   document.body.classList.toggle('member-access', profile.role === 'member');
   document.body.classList.toggle('viewer-access', profile.role === 'viewer');
@@ -2182,7 +2207,10 @@ async function initializeOperation() {
 
     applyLoadedState(await loadAgencyState());
     operationReady = true;
-    if (!localMode) bindRealtime(profile.agency_id);
+    if (!localMode) {
+      bindRealtime(profile.agency_id);
+      bindOperationFreshness();
+    }
     document.querySelector('.storage-note span').textContent = localMode
       ? 'Dados salvos neste navegador'
       : 'Dados protegidos e compartilhados';
@@ -2676,6 +2704,8 @@ return {
   unmount() {
     unsubscribeRealtime?.();
     unsubscribeRealtime = undefined;
+    unsubscribeOperationFreshness?.();
+    unsubscribeOperationFreshness = undefined;
     operationPersistence.reset();
     mounted = false;
   }

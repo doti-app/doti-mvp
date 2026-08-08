@@ -15,7 +15,8 @@ const OPERATION_TABLES = [
   'step_tasks',
   'deliverable_links',
   'files',
-  'activity_events'
+  'activity_events',
+  'client_approval_decisions'
 ];
 
 let context;
