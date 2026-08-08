@@ -4,7 +4,7 @@ import test from 'node:test';
 import { createOperationFiles } from '../src/domains/operation/domain/files.js';
 import { recordActivity } from '../src/domains/operation/domain/commands.js';
 import { createOperationPersistence } from '../src/domains/operation/domain/persistence.js';
-import { effectiveDeadline, macroStatus, overdueDeadline } from '../src/domains/operation/domain/selectors.js';
+import { effectiveDeadline, isClientActionStep, macroStatus, overdueDeadline } from '../src/domains/operation/domain/selectors.js';
 import { createEmptyOperationState, normalizeOperationState } from '../src/domains/operation/domain/state.js';
 
 test('normaliza snapshots legados sem perder a referência do cliente ou as etapas', () => {
@@ -54,6 +54,29 @@ test('calcula prazo, atraso e macrostatus a partir do estado do entregável', ()
   assert.deepEqual(overdueDeadline({ due: '2026-08-20' }, deliverable, new Date('2026-08-06T12:00:00.000Z')), {
     kind: 'step', due: '2026-08-04', label: 'Aprovação do cliente'
   });
+});
+
+test('identifica o grupo do cliente pela marcação explícita e normaliza o legado', () => {
+  const state = normalizeOperationState({
+    version: 3,
+    groups: [
+      { id: 'grupo-legado', name: 'Cliente / Atendimento', initials: 'CL' },
+      { id: 'outro', name: 'Cliente VIP', initials: 'CV', isClientGroup: true }
+    ],
+    workflows: [], clients: [], projects: [], deliverables: [], activity: []
+  });
+
+  assert.equal(state.groups.filter(group => group.isClientGroup).length, 1);
+  assert.equal(state.groups.find(group => group.id === 'outro').isClientGroup, true);
+  assert.equal(isClientActionStep({ groupId: 'outro' }, state.groups), true);
+  assert.equal(isClientActionStep({ groupId: 'grupo-legado' }, state.groups), false);
+
+  const legacy = normalizeOperationState({
+    version: 3,
+    groups: [{ id: 'antigo', name: 'Cliente / Atendimento', initials: 'CL' }],
+    workflows: [], clients: [], projects: [], deliverables: [], activity: []
+  });
+  assert.equal(legacy.groups[0].isClientGroup, true);
 });
 
 test('serializa persistência e descarta alterações pendentes após um erro', async () => {

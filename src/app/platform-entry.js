@@ -1,7 +1,7 @@
 import { getAuthConfig, getSupabase } from '../shared/auth/supabase-client.js';
 
 const state = { supabase: null, context: null, overview: null, accounts: null, staff: null, audit: null, toastTimer: null };
-const roles = { owner: 'Proprietário', admin: 'Administrador', member: 'Membro', viewer: 'Visualizador' };
+const roles = { owner: 'Proprietário', admin: 'Administrador', member: 'Membro', viewer: 'Visualizador', client: 'Cliente da agência' };
 const actionNames = {
   'agency.entered': 'Entrou em suporte', 'agency.created': 'Criou a agência',
   'agency.renamed': 'Renomeou a agência', 'agency.archived': 'Arquivou a agência',
@@ -91,11 +91,26 @@ function renderAccounts() {
   }).join('') : '<div class="platform-empty">Nenhum acesso encontrado.</div>';
 }
 
-const roleOptions = selected => ['admin', 'member', 'viewer'].map(role => `<option value="${role}"${selected === role ? ' selected' : ''}>${roles[role]}</option>`).join('');
+const staffRoleOptions = selected => ['admin', 'member', 'viewer'].map(role => `<option value="${role}"${selected === role ? ' selected' : ''}>${roles[role]}</option>`).join('');
+const customerRoleOptions = selected => ['admin', 'member', 'viewer', 'client'].map(role => `<option value="${role}"${selected === role ? ' selected' : ''}>${roles[role]}</option>`).join('');
+
+function chooseAgencyClient(clients, currentId = '') {
+  if (!clients?.length) throw new Error('Cadastre um cliente nesta agência antes de criar o acesso.');
+  const currentIndex = Math.max(0, clients.findIndex(client => client.id === currentId));
+  const answer = globalThis.prompt(
+    `Escolha o cliente pelo número:\n${clients.map((client, index) => `${index + 1}. ${client.name}`).join('\n')}`,
+    String(currentIndex + 1)
+  );
+  if (answer === null) return null;
+  const selected = clients[Number(answer) - 1]
+    || clients.find(client => client.id === answer.trim() || clean(client.name) === clean(answer));
+  if (!selected) throw new Error('Escolha um cliente válido da lista.');
+  return selected.id;
+}
 
 function renderStaff() {
   const payload = state.staff || { staff: [], invitations: [] };
-  const rows = payload.staff.map(person => { const self = person.id === state.context.userId; return `<div class="platform-staff-row"><div><strong>${escapeHtml(person.full_name)}</strong><span>${escapeHtml(person.email)}${self ? ' · você' : ''}</span></div><select data-staff-role="${person.id}"${self ? ' disabled title="Outro administrador deve alterar seu nível"' : ''}>${roleOptions(person.role)}</select><span class="platform-badge ${person.is_active ? '' : 'inactive'}">${person.is_active ? 'ATIVO' : 'SUSPENSO'}</span><button type="button" data-toggle-staff="${person.id}" data-active="${person.is_active}"${self ? ' disabled title="Outro administrador deve alterar seu acesso"' : ''}>${person.is_active ? 'Suspender' : 'Reativar'}</button></div>`; });
+  const rows = payload.staff.map(person => { const self = person.id === state.context.userId; return `<div class="platform-staff-row"><div><strong>${escapeHtml(person.full_name)}</strong><span>${escapeHtml(person.email)}${self ? ' · você' : ''}</span></div><select data-staff-role="${person.id}"${self ? ' disabled title="Outro administrador deve alterar seu nível"' : ''}>${staffRoleOptions(person.role)}</select><span class="platform-badge ${person.is_active ? '' : 'inactive'}">${person.is_active ? 'ATIVO' : 'SUSPENSO'}</span><button type="button" data-toggle-staff="${person.id}" data-active="${person.is_active}"${self ? ' disabled title="Outro administrador deve alterar seu acesso"' : ''}>${person.is_active ? 'Suspender' : 'Reativar'}</button></div>`; });
   rows.push(...payload.invitations.map(invitation => `<div class="platform-staff-row"><div><strong>${escapeHtml(invitation.full_name)}</strong><span>${escapeHtml(invitation.email)} · convite pendente</span></div><span>${escapeHtml(roles[invitation.role])}</span><span class="platform-badge warning">ATÉ ${escapeHtml(date(invitation.expires_at))}</span><button type="button" data-revoke-staff-invitation="${invitation.id}">Revogar</button></div>`));
   byId('staffDirectory').innerHTML = rows.join('') || '<div class="platform-empty">Nenhuma pessoa na equipe DOT.</div>';
 }
@@ -130,14 +145,14 @@ async function renameAgency(id) { const name = globalThis.prompt('Novo nome da a
 async function toggleArchive(id, archived) { if (!globalThis.confirm(`Deseja ${archived ? 'restaurar' : 'arquivar'} a agência ${agency(id)?.name || ''}?`)) return; await request(archived ? 'restore_agency' : 'archive_agency', { agencyId: id }); byId('agencyDialog').close(); await loadOverview(); toast(archived ? 'Agência restaurada' : 'Agência arquivada'); }
 
 function renderTeam(item, payload) {
-  const members = (payload.members || []).map(member => `<div class="platform-team-row"><div><strong>${escapeHtml(member.full_name)}</strong><span>${escapeHtml(member.email)}</span></div>${admin() && member.role !== 'owner' ? `<select data-member-role="${member.id}" data-agency-id="${item.id}">${roleOptions(member.role)}</select>` : `<span>${escapeHtml(roles[member.role])}</span>`}<span class="platform-badge ${member.is_active ? '' : 'inactive'}">${member.is_active ? 'ATIVO' : 'SUSPENSO'}</span><div>${admin() && member.role !== 'owner' ? `<button type="button" data-toggle-member="${member.id}" data-agency-id="${item.id}" data-active="${member.is_active}">${member.is_active ? 'Suspender' : 'Reativar'}</button>${member.is_active ? `<button type="button" data-transfer-owner="${member.id}" data-agency-id="${item.id}" data-member-name="${escapeHtml(member.full_name)}">Tornar proprietário</button>` : ''}` : ''}</div></div>`).join('');
-  const invitations = (payload.invitations || []).map(invitation => `<div class="platform-team-row"><div><strong>${escapeHtml(invitation.full_name)}</strong><span>${escapeHtml(invitation.email)} · convite pendente</span></div><span>${escapeHtml(roles[invitation.role])}</span><span class="platform-badge warning">PENDENTE</span>${admin() ? `<button type="button" data-revoke-member-invitation="${invitation.id}" data-agency-id="${item.id}">Revogar</button>` : '<span></span>'}</div>`).join('');
+  const members = (payload.members || []).map(member => `<div class="platform-team-row"><div><strong>${escapeHtml(member.full_name)}</strong><span>${escapeHtml(member.email)}${member.client_name ? ` · ${escapeHtml(member.client_name)}` : ''}</span></div>${admin() && member.role !== 'owner' ? `<select data-member-role="${member.id}" data-agency-id="${item.id}" data-client-id="${escapeHtml(member.client_id || '')}">${customerRoleOptions(member.role)}</select>` : `<span>${escapeHtml(roles[member.role])}</span>`}<span class="platform-badge ${member.is_active ? '' : 'inactive'}">${member.is_active ? 'ATIVO' : 'SUSPENSO'}</span><div>${admin() && member.role !== 'owner' ? `<button type="button" data-toggle-member="${member.id}" data-agency-id="${item.id}" data-active="${member.is_active}">${member.is_active ? 'Suspender' : 'Reativar'}</button>${member.is_active ? `<button type="button" data-transfer-owner="${member.id}" data-agency-id="${item.id}" data-member-name="${escapeHtml(member.full_name)}">Tornar proprietário</button>` : ''}` : ''}</div></div>`).join('');
+  const invitations = (payload.invitations || []).map(invitation => `<div class="platform-team-row"><div><strong>${escapeHtml(invitation.full_name)}</strong><span>${escapeHtml(invitation.email)} · convite pendente${invitation.client_name ? ` · ${escapeHtml(invitation.client_name)}` : ''}</span></div><span>${escapeHtml(roles[invitation.role])}</span><span class="platform-badge warning">PENDENTE</span>${admin() ? `<button type="button" data-revoke-member-invitation="${invitation.id}" data-agency-id="${item.id}">Revogar</button>` : '<span></span>'}</div>`).join('');
   byId('agencyTeamDialogContent').innerHTML = `<header><div><small>EQUIPE DA AGÊNCIA</small><h2>${escapeHtml(item.name)}</h2></div><button type="button" data-close-dialog>×</button></header>${admin() && item.status === 'active' ? `<div class="platform-dialog-actions"><button class="platform-primary" type="button" data-invite-member="${item.id}">+ Convidar usuário</button></div>` : ''}<div class="platform-team-list">${members || '<div class="platform-empty">Nenhum usuário.</div>'}${invitations}</div>`;
 }
 
 async function openTeam(id) { const item = agency(id); renderTeam(item, await request('agency_team_list', { agencyId: id })); byId('agencyDialog').close(); byId('agencyTeamDialog').showModal(); }
 async function refreshTeam(id) { renderTeam(agency(id), await request('agency_team_list', { agencyId: id })); }
-async function inviteMember(id) { const fullName = globalThis.prompt('Nome completo da pessoa:'); if (!fullName) return; const email = globalThis.prompt('E-mail da pessoa:'); if (!email) return; const role = globalThis.prompt('Nível: admin, member ou viewer', 'member'); if (!role) return; await request('agency_team_invite', { agencyId: id, fullName, email, role: role.trim().toLowerCase() }); await refreshTeam(id); toast('Convite enviado', email); }
+async function inviteMember(id) { const fullName = globalThis.prompt('Nome completo da pessoa:'); if (!fullName) return; const email = globalThis.prompt('E-mail da pessoa:'); if (!email) return; const role = globalThis.prompt('Nível: admin, member, viewer ou client', 'member')?.trim().toLowerCase(); if (!role) return; let clientId = null; if (role === 'client') { const payload = await request('agency_team_list', { agencyId: id }); clientId = chooseAgencyClient(payload.clients); if (!clientId) return; } await request('agency_team_invite', { agencyId: id, fullName, email, role, clientId }); await refreshTeam(id); toast('Convite enviado', email); }
 async function updateMember(agencyId, memberId, changes) { await request('agency_team_update_member', { agencyId, memberId, ...changes }); await refreshTeam(agencyId); state.accounts = null; toast('Acesso atualizado'); }
 async function transferOwner(agencyId, newOwnerId, name) { if (!globalThis.confirm(`Transferir a propriedade desta agência para ${name}?`)) return; await request('transfer_owner', { agencyId, newOwnerId }); await loadOverview(); await refreshTeam(agencyId); toast('Propriedade transferida', name); }
 
@@ -175,8 +190,21 @@ function bindEvents() {
   });
   document.addEventListener('change', async event => {
     const target = event.target;
-    try { if (target.matches('[data-member-role]')) await updateMember(target.dataset.agencyId, target.dataset.memberRole, { role: target.value }); if (target.matches('[data-staff-role]')) { await request('update_staff', { staffId: target.dataset.staffRole, role: target.value }); await loadStaff(true); toast('Nível DOT atualizado'); } }
-    catch (error) { toast('Operação não concluída', error.message); }
+    try {
+      if (target.matches('[data-member-role]')) {
+        let clientId = null;
+        if (target.value === 'client') {
+          const payload = await request('agency_team_list', { agencyId: target.dataset.agencyId });
+          clientId = chooseAgencyClient(payload.clients, target.dataset.clientId);
+          if (!clientId) return void await refreshTeam(target.dataset.agencyId);
+        }
+        await updateMember(target.dataset.agencyId, target.dataset.memberRole, { role: target.value, clientId });
+      }
+      if (target.matches('[data-staff-role]')) { await request('update_staff', { staffId: target.dataset.staffRole, role: target.value }); await loadStaff(true); toast('Nível DOT atualizado'); }
+    } catch (error) {
+      if (target.matches('[data-member-role]')) await refreshTeam(target.dataset.agencyId);
+      toast('Operação não concluída', error.message);
+    }
   });
 }
 

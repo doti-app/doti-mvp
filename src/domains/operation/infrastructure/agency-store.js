@@ -104,6 +104,12 @@ export async function importLegacyAgencyState(state, fingerprint, counts, expect
   return Number(data);
 }
 
+export async function configureAgencyClientGroup(groupId) {
+  const auth = await waitForOperationContext();
+  if (auth.localMode) return { groupId, configured: true };
+  return callRpc('configure_client_group', { p_group_id: groupId });
+}
+
 async function callRpc(name, body = {}) {
   const auth = await waitForOperationContext();
   const token = auth.session?.access_token;

@@ -12,7 +12,7 @@ test('carrega o painel local e navega pelas áreas principais', async ({ page })
   await expect(page.locator('.local-mode-banner')).toContainText('Modo local seguro');
   await expect(page.locator('#dashboardHeadline')).toBeVisible();
 
-  for (const pageId of ['demandas', 'fluxos', 'clientes', 'curadoria-chatbot', 'equipe', 'whatsapp']) {
+  for (const pageId of ['demandas', 'aprovacoes', 'fluxos', 'clientes', 'curadoria-chatbot', 'equipe', 'whatsapp']) {
     await page.locator(`[data-page="${pageId}"]`).click();
     await expect(page.locator(`#${pageId}`)).toHaveClass(/active/);
   }
@@ -21,6 +21,112 @@ test('carrega o painel local e navega pelas áreas principais', async ({ page })
   await expect(page.locator('#meus-dados')).toHaveClass(/active/);
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);
+});
+
+test('cliente acessa somente suas aprovações e devolve a demanda para ajustes', async ({ page }) => {
+  await page.addInitScript(state => {
+    localStorage.setItem('doti-agency-live-v4', JSON.stringify(state));
+  }, {
+    version: 3,
+    revision: 0,
+    groups: [
+      { id: 'g-producao', name: 'Produção', initials: 'PR' },
+      { id: 'g-cliente-portal', name: 'Representante do cliente', initials: 'CL', isClientGroup: true }
+    ],
+    workflows: [],
+    clients: [
+      { id: 'local-client', name: 'Café Aurora' },
+      { id: 'outro-cliente', name: 'Outro cliente' }
+    ],
+    projects: [
+      { id: 'projeto-local', clientId: 'local-client', name: 'Campanha de lançamento', due: '2026-08-30' },
+      { id: 'projeto-terceiro', clientId: 'outro-cliente', name: 'Projeto sigiloso', due: '2026-08-30' }
+    ],
+    deliverables: [
+      {
+        id: 'entrega-local', projectId: 'projeto-local', name: 'Carrossel da campanha', category: 'Design', color: 'social',
+        status: 'active', stepIndex: 1, due: '2026-08-20', note: 'Revise textos, cores e chamada principal.',
+        links: [{ id: 'link-1', href: 'https://example.com/aprovacao', label: 'Prévia navegável' }],
+        attachments: [], approvalDecisions: [],
+        steps: [
+          { id: 'etapa-producao', name: 'Criação', groupId: 'g-producao', tasks: [] },
+          { id: 'etapa-aprovacao', name: 'Aprovação do cliente', groupId: 'g-cliente-portal', tasks: [] }
+        ]
+      },
+      {
+        id: 'entrega-terceiro', projectId: 'projeto-terceiro', name: 'Material de outro cliente', category: 'Design', color: 'social',
+        status: 'active', stepIndex: 1, note: '', links: [], attachments: [], approvalDecisions: [],
+        steps: [
+          { id: 'etapa-terceiro-producao', name: 'Criação', groupId: 'g-producao', tasks: [] },
+          { id: 'etapa-terceiro-aprovacao', name: 'Aprovação do cliente', groupId: 'g-cliente-portal', tasks: [] }
+        ]
+      }
+    ],
+    activity: []
+  });
+
+  const errors = [];
+  const consoleErrors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  await page.goto('/?localRole=client#clientes');
+
+  await expect(page).toHaveURL(/#aprovacoes$/);
+  await expect(page.locator('.approvals-page-title h1')).toHaveText('Minhas aprovações');
+  await expect(page.locator('.nav-item:not(#approvalNavItem):visible')).toHaveCount(0);
+  await expect(page.locator('#aprovacoes')).toHaveClass(/active/);
+  await expect(page.locator('#clientes')).not.toHaveClass(/active/);
+  await expect(page.locator('.approval-card')).toHaveCount(1);
+  await expect(page.locator('.approval-card')).toContainText('Carrossel da campanha');
+  await expect(page.locator('body')).not.toContainText('Material de outro cliente');
+  await page.screenshot({ path: '/tmp/client-approvals-visual.png', fullPage: true });
+
+  await page.locator('.approval-card').click();
+  await expect(page.locator('.doti-modal')).toContainText('Revise textos, cores e chamada principal.');
+  await page.locator('.reject-step-btn').click();
+  await expect(page.locator('[data-approval-status]')).toContainText('Explique os ajustes necessários');
+  await page.locator('textarea[name="comment"]').fill('Aumentar o contraste do título');
+  await page.locator('.reject-step-btn').click();
+
+  await expect(page.locator('.approval-empty')).toContainText('Tudo em dia por aqui');
+  const persisted = await page.evaluate(() => JSON.parse(localStorage.getItem('doti-agency-live-v4')));
+  const deliverable = persisted.deliverables.find(item => item.id === 'entrega-local');
+  expect(deliverable.stepIndex).toBe(0);
+  expect(deliverable.approvalDecisions[0].decision).toBe('rejected');
+  expect(deliverable.approvalDecisions[0].comment).toBe('Aumentar o contraste do título');
+  expect(errors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+});
+
+test('gestão da equipe exige um cliente ao criar o perfil Cliente da agência', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('doti-agency-live-v4', JSON.stringify({
+      version: 3,
+      groups: [{ id: 'g-atendimento', name: 'Atendimento', initials: 'AT' }],
+      workflows: [],
+      clients: [{ id: 'client-aurora', name: 'Café Aurora', color: '#ffd400' }],
+      projects: [], deliverables: [], activity: []
+    }));
+    localStorage.removeItem('doti-local-team-v1');
+  });
+  await page.goto('/');
+  await page.locator('[data-page="equipe"]').click();
+  await page.locator('#inviteMemberButton').click();
+
+  const modal = page.locator('.team-invite-modal');
+  await modal.locator('input[name="fullName"]').fill('Carlos Cliente');
+  await modal.locator('input[name="email"]').fill('carlos@cliente.test');
+  await modal.locator('input[name="role"][value="client"]').check();
+  await expect(modal.locator('.team-client-picker')).toBeVisible();
+  await expect(modal.locator('select[name="clientId"]')).toHaveAttribute('required', '');
+  await modal.locator('select[name="clientId"]').selectOption('client-aurora');
+  await modal.locator('button[type="submit"]').click();
+
+  const row = page.locator('.team-member').filter({ hasText: 'Carlos Cliente' });
+  await expect(row).toContainText('Cliente da agência');
+  await expect(row).toContainText('Vinculado a Café Aurora');
 });
 
 test('a rota de login retorna ao painel no modo local', async ({ page }) => {
@@ -57,6 +163,7 @@ test('renderiza o portal DOT autenticado com visão macro e diretórios', async 
         overview,
         list_accounts: { accounts: [{ id: 'user-1', email: 'ana@aurora.test', fullName: 'Ana Lima', createdAt: new Date().toISOString(), lastSignInAt: new Date().toISOString(), emailConfirmedAt: new Date().toISOString(), customer: { agencyId: '27000000-0000-4000-8000-000000000001', role: 'owner', isActive: true }, platform: null }] },
         list_staff: { staff: [{ id: 'staff-1', email: 'admin@doti.test', full_name: 'Admin DOT', role: 'admin', is_active: true }], invitations: [] },
+        agency_team_list: { members: [{ id: 'owner-1', email: 'ana@aurora.test', full_name: 'Ana Lima', role: 'owner', client_id: null, client_name: '', is_active: true }, { id: 'client-user', email: 'cliente@aurora.test', full_name: 'Carlos Cliente', role: 'client', client_id: 'client-1', client_name: 'Café Aurora', is_active: true }], invitations: [], clients: [{ id: 'client-1', name: 'Café Aurora' }] },
         list_audit: { events: [] }
       };
       window.supabase = { createClient: () => ({
@@ -76,6 +183,11 @@ test('renderiza o portal DOT autenticado com visão macro e diretórios', async 
   await expect(page.locator('#accountDirectory')).toContainText('ana@aurora.test');
   await page.locator('[data-platform-page="staff"]').click();
   await expect(page.locator('#staffDirectory')).toContainText('Admin DOT');
+  await page.locator('[data-platform-page="agencies"]').click();
+  await page.locator('#agencyDirectory [data-open-agency]').first().click();
+  await page.locator('#agencyDialog [data-team-agency]').click();
+  await expect(page.locator('[data-member-role="client-user"]')).toHaveValue('client');
+  await expect(page.locator('#agencyTeamDialogContent')).toContainText('Café Aurora');
   await page.screenshot({ path: '/tmp/doti-portal-visual.png', fullPage: true });
   expect(errors).toEqual([]);
 });

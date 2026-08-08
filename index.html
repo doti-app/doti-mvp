@@ -31,6 +31,7 @@
       <nav class="nav" aria-label="Menu principal">
         <button class="nav-item active" data-page="dashboard" data-label="Visão geral" title="Visão geral"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.5"></rect><rect x="14" y="4" width="6" height="6" rx="1.5"></rect><rect x="4" y="14" width="6" height="6" rx="1.5"></rect><rect x="14" y="14" width="6" height="6" rx="1.5"></rect></svg></span><span class="nav-label">Visão geral</span></button>
         <button class="nav-item" data-page="demandas" data-label="Demandas" title="Demandas"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"></rect><path d="M9 4.5V3h6v1.5M8.5 10h7M8.5 14h7M8.5 18h4"></path></svg></span><span class="nav-label">Demandas</span><b id="demandNavCount">0</b></button>
+        <button class="nav-item" id="approvalNavItem" data-page="aprovacoes" data-label="Aprovações" title="Aprovações"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.6-2.8 8.2-7 10-4.2-1.8-7-5.4-7-10V6l7-3Z"></path><path d="m9 12 2 2 4-5"></path></svg></span><span class="nav-label">Aprovações</span><b id="approvalNavCount"></b></button>
         <button class="nav-item" data-page="fluxos" data-label="Fluxos" title="Fluxos"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"></circle><circle cx="18" cy="7" r="2"></circle><circle cx="18" cy="18" r="2"></circle><path d="M6 7v7a4 4 0 0 0 4 4h6M8 6h6a4 4 0 0 1 4 4v6"></path></svg></span><span class="nav-label">Fluxos</span><b id="workflowNavCount">0</b></button>
         <button class="nav-item" data-page="clientes" data-label="Clientes" title="Clientes"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"></rect><path d="M8 7V5h8v2M3 12h18M10 12v2h4v-2"></path></svg></span><span class="nav-label">Clientes</span><b id="clientNavCount">0</b></button>
         <button class="nav-item" data-page="curadoria-chatbot" data-label="Controle de bots" title="Controle de bots"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="13" rx="3"></rect><path d="M12 7V4M10 4h4M8 12h.01M16 12h.01M9 16h6"></path></svg></span><span class="nav-label">Bots</span><b id="curationNavCount">0</b></button>
@@ -118,6 +119,24 @@
         <section class="kanban" id="deliverablesBoard"></section>
         <section class="projects-view" id="projectsView" hidden></section>
         <section class="calendar-view" id="calendarView" hidden></section>
+      </div>
+
+      <div class="page approvals-page" id="aprovacoes">
+        <section class="page-title approvals-page-title">
+          <div><p class="eyebrow">REVISÃO DO CLIENTE</p><h1>Aprovações de clientes</h1><p>Acompanhe as etapas que aguardam validação e registre a decisão.</p></div>
+          <button class="outline-btn" id="refreshApprovals" type="button">↻ Atualizar</button>
+        </section>
+        <section class="approval-summary" aria-label="Resumo das aprovações">
+          <article><span>PENDENTES</span><strong id="approvalPendingMetric">0</strong><small>aguardando decisão</small></article>
+          <article><span>CLIENTES</span><strong id="approvalClientMetric">0</strong><small>com itens na fila</small></article>
+          <article><span>ATRASADAS</span><strong id="approvalOverdueMetric">0</strong><small>fora do prazo</small></article>
+        </section>
+        <div class="approval-toolbar">
+          <label class="mini-search">⌕ <input id="approvalSearch" placeholder="Buscar cliente, projeto ou demanda"></label>
+        </div>
+        <section class="approval-queue" id="approvalQueue" aria-live="polite">
+          <div class="approval-loading">Abra esta área para carregar as aprovações.</div>
+        </section>
       </div>
 
       <div class="page" id="fluxos">
@@ -271,6 +290,7 @@
             <div class="access-level admin"><i>02</i><div><strong>Administrador</strong><p>Gerencia operação e membros, exceto proprietários.</p></div></div>
             <div class="access-level member"><i>03</i><div><strong>Membro</strong><p>Cria e atualiza projetos, etapas e clientes.</p></div></div>
             <div class="access-level viewer"><i>04</i><div><strong>Visualizador</strong><p>Acompanha a operação sem fazer alterações.</p></div></div>
+            <div class="access-level client"><i>05</i><div><strong>Cliente da agência</strong><p>Acessa somente as aprovações dos próprios projetos.</p></div></div>
           </aside>
         </section>
       </div>

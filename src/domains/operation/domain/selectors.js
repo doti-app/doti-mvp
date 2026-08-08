@@ -42,11 +42,17 @@ export function overdueDeadline(project, deliverable, today = new Date()) {
   return dateIsPast(due, today) ? { kind: 'project', due, label: 'Prazo do entregável' } : null;
 }
 
-/** @param {any} deliverable */
-export function macroStatus(deliverable) {
+/** @param {any} step @param {any[]} [groups] */
+export function isClientActionStep(step, groups = []) {
+  return step?.groupId === 'g-cliente'
+    || groups.some(group => group.id === step?.groupId && group.isClientGroup === true);
+}
+
+/** @param {any} deliverable @param {any[]} [groups] */
+export function macroStatus(deliverable, groups = []) {
   if (deliverable.status === 'done') return 'done';
   const step = currentStep(deliverable);
-  if (/aprovação|apresentação|revisão interna/i.test(step.name) || step.groupId === 'g-cliente' || step.groupId === 'g-coordenacao') return 'approval';
+  if (/aprovação|apresentação|revisão interna/i.test(step.name) || isClientActionStep(step, groups) || step.groupId === 'g-coordenacao') return 'approval';
   return deliverable.stepIndex <= 1 ? 'planning' : 'production';
 }
 

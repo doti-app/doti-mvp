@@ -4,13 +4,17 @@ let authContext = null;
 let stopSubscription = () => {};
 
 function startLocalMode() {
+  const localRole = new URLSearchParams(location.search).get('localRole') === 'client'
+    ? 'client'
+    : 'owner';
   const profile = {
     id: 'local-owner',
     agency_id: 'local-agency',
+    client_id: localRole === 'client' ? 'local-client' : null,
     email: 'local@doti.dev',
-    full_name: 'Ambiente local',
+    full_name: localRole === 'client' ? 'Cliente de teste' : 'Ambiente local',
     agency_name: 'Doti Sandbox',
-    role: 'owner',
+    role: localRole,
     is_active: true,
     avatar_url: ''
   };
@@ -27,8 +31,10 @@ function startLocalMode() {
   const profileElement = document.querySelector('.profile');
   if (profileElement) {
     profileElement.querySelector('strong').textContent = profile.full_name;
-    profileElement.querySelector('small').textContent = 'Doti Sandbox · proprietario';
-    profileElement.querySelector('.avatar').textContent = 'DL';
+    profileElement.querySelector('small').textContent = localRole === 'client'
+      ? 'Doti Sandbox · cliente da agência'
+      : 'Doti Sandbox · proprietário';
+    profileElement.querySelector('.avatar').textContent = localRole === 'client' ? 'CT' : 'DL';
     profileElement.title = 'Modo local seguro';
   }
 
@@ -110,14 +116,14 @@ async function accountContextFor(supabase) {
 async function profileFor(supabase, userId) {
   let { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('id, agency_id, email, full_name, agency_name, role, is_active, avatar_url')
+    .select('id, agency_id, client_id, email, full_name, agency_name, role, is_active, avatar_url')
     .eq('id', userId)
     .maybeSingle();
 
   if (profileError && String(profileError.message).includes('avatar_url')) {
     const fallback = await supabase
       .from('profiles')
-      .select('id, agency_id, email, full_name, agency_name, role, is_active')
+      .select('id, agency_id, client_id, email, full_name, agency_name, role, is_active')
       .eq('id', userId)
       .maybeSingle();
     profile = fallback.data ? { ...fallback.data, avatar_url: '' } : null;
@@ -126,7 +132,7 @@ async function profileFor(supabase, userId) {
   if (profileError && String(profileError.message).includes('is_active')) {
     const fallback = await supabase
       .from('profiles')
-      .select('id, agency_id, email, full_name, agency_name, role')
+      .select('id, agency_id, client_id, email, full_name, agency_name, role')
       .eq('id', userId)
       .maybeSingle();
     profile = fallback.data ? { ...fallback.data, is_active: true, avatar_url: '' } : null;
@@ -228,7 +234,8 @@ async function protectPanel() {
       owner: 'proprietário',
       admin: 'administrador',
       member: 'membro',
-      viewer: 'visualizador'
+      viewer: 'visualizador',
+      client: 'cliente da agência'
     };
     const profileElement = document.querySelector('.profile');
     if (profileElement) {

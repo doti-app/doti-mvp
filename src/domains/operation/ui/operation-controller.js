@@ -1,6 +1,7 @@
 import {
   attachKnownFilePaths,
   canonicalizeLegacyState,
+  configureAgencyClientGroup,
   downloadOperationFile,
   importLegacyAgencyState,
   legacyCounts,
@@ -221,7 +222,7 @@ function clientForProject(project) {
   return clientById(project?.clientId) || state.clients.find(client => normalize(client.name) === normalize(project?.client));
 }
 function groupById(id) {
-  return state.groups.find(group => group.id === id) || { name: 'Sem grupo', initials: '—' };
+  return state.groups.find(group => group.id === id) || { name: 'Sem grupo', initials: '—', isClientGroup: false };
 }
 function currentStep(deliverable) {
   return selectCurrentStep(deliverable);
@@ -255,7 +256,7 @@ function overdueDeadline(project, deliverable) {
   return selectOverdueDeadline(project, deliverable);
 }
 function macroStatus(deliverable) {
-  return selectMacroStatus(deliverable);
+  return selectMacroStatus(deliverable, state.groups);
 }
 function isOverdue(project, deliverable) {
   return Boolean(overdueDeadline(project, deliverable));
@@ -1065,6 +1066,12 @@ function openAttachmentRenameDialog(deliverable, attachment, project, step, deli
   input.select();
 }
 
+function renderApprovalDecisionHistory(deliverable) {
+  const decisions = deliverable.approvalDecisions || [];
+  if (!decisions.length) return '';
+  return `<section class="approval-modal-section internal-approval-history"><h4>HISTÓRICO DE APROVAÇÕES</h4><div class="approval-history">${decisions.map(decision => `<article class="${decision.decision}"><i>${decision.decision === 'approved' ? '✓' : '!'}</i><div><strong>${decision.decision === 'approved' ? 'Aprovado' : 'Ajustes solicitados'}</strong><small>${escapeHtml(decision.decidedBy || 'Usuário')} · ${formatDateTime(decision.decidedAt)}</small>${decision.comment ? `<p>${escapeHtml(decision.comment)}</p>` : ''}</div></article>`).join('')}</div></section>`;
+}
+
 function openDeliverable(id) {
   const deliverable = state.deliverables.find(item => item.id === id);
   if (!deliverable) return;
@@ -1073,7 +1080,8 @@ function openDeliverable(id) {
   const group = groupById(step.groupId);
   const allTasksDone = step.tasks.length === 0 || step.tasks.every(task => task.done);
   const milestone = nextStepDeadline(deliverable);
-  const isApprovalStep = deliverable.status !== 'done' && deliverable.stepIndex > 0 && macroStatus(deliverable) === 'approval';
+  const isClientApprovalStep = deliverable.status !== 'done' && group.isClientGroup === true;
+  const isApprovalStep = !isClientApprovalStep && deliverable.status !== 'done' && deliverable.stepIndex > 0 && macroStatus(deliverable) === 'approval';
   openModal(deliverable.name, `
     <div class="deliverable-context"><span class="tag ${deliverable.color}">${escapeHtml(deliverable.category)}</span><strong>${escapeHtml(project.client)}</strong><span>${escapeHtml(project.name)}</span></div>
     <div class="stage-focus"><small>ETAPA ATUAL · ${deliverable.stepIndex + 1} DE ${deliverable.steps.length}</small><h3>${escapeHtml(step.name)}</h3><p>Responsável: <strong>${escapeHtml(group.name)}</strong>${step.due ? ` · Prazo: <strong>${formatDate(step.due)}</strong>` : ''}</p></div>
@@ -1085,6 +1093,8 @@ function openDeliverable(id) {
     <label class="stage-observation-field"><span>Observações do entregável</span><div class="observation-editor" data-note-editor contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Briefing, links, decisões ou orientações">${linkifyObservationText(deliverable.note || '')}</div><textarea name="note" hidden>${escapeHtml(deliverable.note || '')}</textarea></label>
     <div class="observation-links" data-observation-links ${observationLinksForDisplay(deliverable.note, deliverable.links).length ? '' : 'hidden'}>${renderObservationLinks(deliverable.note, deliverable.links)}</div>
     ${renderDeliverableAttachments(deliverable)}
+    ${renderApprovalDecisionHistory(deliverable)}
+    ${isClientApprovalStep ? '<div class="approval-readonly-note">Esta etapa exige uma decisão auditada. Use a área <strong>Aprovações</strong> para aprovar ou solicitar ajustes.</div>' : ''}
     <div class="schedule-head"><div><span class="modal-section-title">CRONOGRAMA DAS ETAPAS</span><small>Datas opcionais — preencha somente os marcos que precisar</small></div>${milestone ? `<b>Próximo: ${escapeHtml(milestone.step.name)} · ${formatDate(milestone.due)}</b>` : '<b>Nenhuma data definida</b>'}</div>
     <div class="step-timeline compact-timeline">${deliverable.steps.map((item, index) => `<div class="step-line ${index < deliverable.stepIndex ? 'complete' : index === deliverable.stepIndex ? 'active' : ''} ${item.due && dateIsPast(item.due) && index >= deliverable.stepIndex && deliverable.status !== 'done' ? 'late-step' : ''}"><i>${index < deliverable.stepIndex ? '✓' : index + 1}</i><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(groupById(item.groupId).name)}</small></div><label class="step-date-control"><span>${item.due ? 'Prazo' : 'Sem data'}</span><input type="date" data-step-date="${item.id}" value="${escapeAttr(item.due || '')}" aria-label="Prazo de ${escapeAttr(item.name)}"></label></div>`).join('')}</div>
     <div class="deliverable-secondary-actions"><button type="button" data-edit-deliverable>Editar entregável</button><button type="button" class="danger-link" data-delete-deliverable>Excluir entregável</button></div>
@@ -1094,6 +1104,11 @@ function openDeliverable(id) {
     if (deliverable.status === 'done') {
       saveState();
       notify('Observação salva', 'As informações do entregável foram atualizadas.');
+      return true;
+    }
+    if (isClientApprovalStep) {
+      saveState();
+      notify('Observação salva', 'A decisão continua pendente na área Aprovações.');
       return true;
     }
     if (!allTasksDone && step.tasks.some(task => !task.done)) {
@@ -1115,7 +1130,7 @@ function openDeliverable(id) {
       notify('Entregável concluído', `${deliverable.name} foi finalizado.`);
     }
     return true;
-  }, deliverable.status === 'done' ? 'Salvar observação' : isApprovalStep ? 'Aprovar e avançar' : deliverable.stepIndex === deliverable.steps.length - 1 ? 'Concluir entregável' : 'Concluir etapa e avançar', form => {
+  }, deliverable.status === 'done' || isClientApprovalStep ? 'Salvar observação' : isApprovalStep ? 'Aprovar e avançar' : deliverable.stepIndex === deliverable.steps.length - 1 ? 'Concluir entregável' : 'Concluir etapa e avançar', form => {
     if (isApprovalStep) {
       const rejectButton = document.createElement('button');
       rejectButton.type = 'button';
@@ -1400,7 +1415,7 @@ function renderWorkflows() {
     <div class="groups-intro"><div><h2>Grupos responsáveis</h2><p>Os grupos são atribuídos às etapas dos fluxos.</p></div><button class="outline-btn" data-create-group>+ Novo grupo</button></div>
     <div class="group-grid">${state.groups.map(group => {
       const useCount = state.workflows.reduce((sum, workflow) => sum + workflow.steps.filter(step => step[1] === group.id).length, 0);
-      return `<article class="group-card"><span class="avatar">${escapeHtml(group.initials)}</span><div><strong>${escapeHtml(group.name)}</strong><small>${useCount} ${useCount === 1 ? 'etapa vinculada' : 'etapas vinculadas'}</small></div><button data-delete-group="${group.id}" title="${usedGroups.has(group.id) ? 'Reatribuir etapas e excluir' : 'Excluir grupo'}" aria-label="Excluir ${escapeAttr(group.name)}">×</button></article>`;
+      return `<article class="group-card ${group.isClientGroup ? 'client-group' : ''}"><span class="avatar">${escapeHtml(group.initials)}</span><div><strong>${escapeHtml(group.name)}</strong><small>${useCount} ${useCount === 1 ? 'etapa vinculada' : 'etapas vinculadas'}</small>${group.isClientGroup ? '<em>Grupo do cliente</em>' : ''}</div><button class="group-client-toggle" data-set-client-group="${group.id}" ${group.isClientGroup ? 'disabled' : ''} title="${group.isClientGroup ? 'Este grupo recebe as aprovações dos clientes' : 'Definir como grupo do cliente'}" aria-label="Definir ${escapeAttr(group.name)} como grupo do cliente">${group.isClientGroup ? '✓' : 'Cliente'}</button><button data-delete-group="${group.id}" title="${usedGroups.has(group.id) ? 'Reatribuir etapas e excluir' : 'Excluir grupo'}" aria-label="Excluir ${escapeAttr(group.name)}">×</button></article>`;
     }).join('')}</div>`;
   document.getElementById('workflowGrid').hidden = flowView !== 'models';
   document.getElementById('groupsPanel').hidden = flowView !== 'groups';
@@ -1472,6 +1487,10 @@ function openWorkflowModal(workflowId = null) {
       row.dataset.workflowStepId
     ]);
     if (steps.some(([name]) => !name)) return notify('Revise as etapas', 'Todas as etapas precisam de um nome.'), false;
+    if (state.groups.find(group => group.id === steps[0][1])?.isClientGroup) {
+      notify('Revise a primeira etapa', 'O grupo do cliente não pode ser responsável pela primeira etapa.', '!');
+      return false;
+    }
     const data = {
       id: workflow?.id || uid('wf'), name: field(form, 'name').trim(), category: field(form, 'category').trim(),
       description: field(form, 'description').trim(), color: workflow?.color || COLORS[state.workflows.length % COLORS.length],
@@ -1667,6 +1686,7 @@ function openGroupModal() {
 function openGroupRemoval(groupId) {
   const group = /** @type {any} */ (groupById(groupId));
   if (!group?.id) return;
+  if (group.isClientGroup) return notify('Grupo protegido', 'Defina outro grupo do cliente antes de excluir este grupo.', '!');
   if (state.groups.length <= 1) return notify('Grupo obrigatório', 'Mantenha pelo menos um grupo para atribuir às etapas.');
   const workflowUses = state.workflows.reduce((sum, workflow) => sum + workflow.steps.filter(step => step[1] === groupId).length, 0);
   const deliverableUses = state.deliverables.reduce((sum, deliverable) => sum + deliverable.steps.filter(step => step.groupId === groupId).length, 0);
@@ -1746,6 +1766,29 @@ function bindDynamicActions() {
   document.querySelectorAll('[data-edit-workflow]').forEach(element => element.onclick = () => openWorkflowModal(element.dataset.editWorkflow));
   document.querySelectorAll('[data-create-workflow]').forEach(button => button.onclick = () => openWorkflowModal());
   document.querySelectorAll('[data-create-group]').forEach(button => button.onclick = openGroupModal);
+  document.querySelectorAll('[data-set-client-group]').forEach(button => button.onclick = async event => {
+    event.stopPropagation();
+    const group = state.groups.find(item => item.id === button.dataset.setClientGroup);
+    if (!group || group.isClientGroup) return;
+    const usedFirst = state.workflows.some(workflow => workflow.steps[0]?.[1] === group.id);
+    if (usedFirst) return notify('Grupo incompatível', 'Este grupo é usado como primeira etapa de um fluxo.', '!');
+    button.disabled = true;
+    try {
+      if (auth.localMode) {
+        state.groups.forEach(item => { item.isClientGroup = item.id === group.id; });
+        await saveState();
+      } else {
+        await configureAgencyClientGroup(group.id);
+        await refreshOperationFromServer();
+      }
+      flowView = 'groups';
+      renderWorkflows();
+      notify('Grupo do cliente atualizado', `${group.name} agora concentra as etapas de aprovação do cliente.`);
+    } catch (error) {
+      notify('Não foi possível atualizar', error.message || 'Tente novamente em instantes.', '!');
+      button.disabled = false;
+    }
+  });
   document.querySelectorAll('[data-delete-group]').forEach(button => button.onclick = event => {
     event.stopPropagation();
     openGroupRemoval(button.dataset.deleteGroup);
@@ -2386,6 +2429,11 @@ async function createProjectWithVirgulinha(form) {
 async function createWorkflowWithVirgulinha(form) {
   const rows = [...form.querySelectorAll('[data-virgulinha-step]')];
   if (rows.length < 2) return null;
+  const firstGroupId = rows[0].querySelector('[name="stepGroup"]').value;
+  if (state.groups.find(group => group.id === firstGroupId)?.isClientGroup) {
+    notify('Revise a primeira etapa', 'O grupo do cliente não pode ser responsável pela primeira etapa.', '!');
+    return null;
+  }
   const name = field(form, 'name').trim();
   if (state.workflows.some(item => normalize(item.name) === normalize(name))) {
     notify('Esse fluxo já existe', 'Abra o fluxo existente ou escolha outro nome.', '!');
@@ -2534,6 +2582,10 @@ function formatDate(value) {
   if (!value) return 'Sem prazo';
   const [year, month, day] = value.split('-');
   return `${day}/${month}/${year}`;
+}
+function formatDateTime(value) {
+  if (!value) return '';
+  return new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 function initials(value) {
   return String(value).split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '—';

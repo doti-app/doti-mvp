@@ -1,6 +1,7 @@
 // @ts-check
 
 import { createCurationDomain } from '../domains/curation/index.js';
+import { createApprovalDomain } from '../domains/approvals/index.js';
 import { createOperationDomain } from '../domains/operation/index.js';
 import { createProfileDomain } from '../domains/profile/index.js';
 import { createTeamDomain } from '../domains/team/index.js';
@@ -24,13 +25,17 @@ export function createApplication(options = {}) {
       const auth = await session.start();
       if (!auth) return;
       const dependencies = { auth, document, events, navigation, notify };
-      domains = createDomainRegistry([
-        createOperationDomain(dependencies),
-        createCurationDomain(dependencies),
-        createWhatsappDomain(dependencies),
-        createTeamDomain(dependencies),
-        createProfileDomain(dependencies)
-      ]);
+      const approvalDomain = createApprovalDomain(dependencies);
+      domains = createDomainRegistry(auth.profile.role === 'client'
+        ? [approvalDomain]
+        : [
+            createOperationDomain(dependencies),
+            createCurationDomain(dependencies),
+            createWhatsappDomain(dependencies),
+            createTeamDomain(dependencies),
+            createProfileDomain(dependencies),
+            approvalDomain
+          ]);
       await domains.mountAll();
     },
     async stop() {

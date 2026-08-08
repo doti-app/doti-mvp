@@ -1,6 +1,6 @@
 // @ts-check
 
-/** @typedef {{ id: string, name: string, initials: string }} OperationGroup */
+/** @typedef {{ id: string, name: string, initials: string, isClientGroup?: boolean }} OperationGroup */
 /** @typedef {string[]} WorkflowStep */
 /** @typedef {{ id: string, name: string, category: string, description: string, color: string, active?: boolean, steps: WorkflowStep[] }} Workflow */
 /** @typedef {{ version: number, groups: OperationGroup[], workflows: Workflow[], clients: any[], projects: any[], deliverables: any[], activity: any[] }} OperationState */
@@ -17,7 +17,7 @@ const DEFAULT_GROUPS = [
   { id: 'g-video', name: 'Vídeo', initials: 'VI' },
   { id: 'g-web', name: 'Desenvolvimento Web', initials: 'DW' },
   { id: 'g-branding', name: 'Branding', initials: 'BR' },
-  { id: 'g-cliente', name: 'Cliente / Atendimento', initials: 'CL' }
+  { id: 'g-cliente', name: 'Cliente / Atendimento', initials: 'CL', isClientGroup: true }
 ];
 
 const DEFAULT_WORKFLOWS = [
@@ -99,6 +99,23 @@ export function normalizeOperationState(value, options = {}) {
   data.groups ||= [];
   data.workflows ||= [];
 
+  const markedClientGroup = data.groups.find(group => group.isClientGroup === true);
+  if (!markedClientGroup) {
+    const legacyClientGroup = data.groups.find(group =>
+      group.id === 'g-cliente'
+      || String(group.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === 'cliente / atendimento'
+    );
+    if (legacyClientGroup) legacyClientGroup.isClientGroup = true;
+  }
+  let clientGroupFound = false;
+  data.groups.forEach(group => {
+    if (group.isClientGroup === true && !clientGroupFound) {
+      clientGroupFound = true;
+      return;
+    }
+    group.isClientGroup = false;
+  });
+
   data.clients.forEach((client, index) => {
     client.color ||= CLIENT_COLORS[index % CLIENT_COLORS.length];
     client.createdAt ||= now();
@@ -145,6 +162,7 @@ export function normalizeOperationState(value, options = {}) {
   data.deliverables.forEach(deliverable => {
     deliverable.attachments ||= [];
     deliverable.links ||= [];
+    deliverable.approvalDecisions ||= [];
     deliverable.steps ||= [];
     deliverable.note ??= deliverable.steps[deliverable.stepIndex]?.note || [...deliverable.steps].reverse().find(step => step.note)?.note || '';
     delete deliverable.observations;

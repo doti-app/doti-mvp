@@ -2,21 +2,23 @@ const roleLabels = {
   owner: 'Proprietário',
   admin: 'Administrador',
   member: 'Membro',
-  viewer: 'Visualizador'
+  viewer: 'Visualizador',
+  client: 'Cliente da agência'
 };
 
 const roleDescriptions = {
   owner: 'Controle total da agência',
   admin: 'Gerencia operação e equipe',
   member: 'Cria e atualiza o trabalho',
-  viewer: 'Apenas acompanha a operação'
+  viewer: 'Apenas acompanha a operação',
+  client: 'Aprova somente os próprios projetos'
 };
 
 /** @param {{ auth: any, events?: EventTarget, document?: Document }} dependencies */
 export function createTeamDomain({ auth, events = new EventTarget(), document: documentRef = globalThis.document }) {
 const document = documentRef;
 let authContext;
-let teamState = { members: [], invitations: [], currentUserId: '', currentRole: '' };
+let teamState = { members: [], invitations: [], clients: [], currentUserId: '', currentRole: '' };
 const LOCAL_TEAM_KEY = 'doti-local-team-v1';
 
 const teamNavItem = document.getElementById('teamNavItem');
@@ -104,7 +106,9 @@ function defaultLocalTeam() {
         id: 'local-member-viewer',
         email: 'cliente@doti.dev',
         full_name: 'Cliente de Teste',
-        role: 'viewer',
+        role: 'client',
+        client_id: 'local-client',
+        client_name: 'Cliente local',
         is_active: true,
         created_at: new Date().toISOString()
       }
@@ -132,6 +136,10 @@ function saveLocalTeam(state) {
 
 function localTeamRequest(action, body = {}) {
   const state = readLocalTeam();
+  const operation = (() => {
+    try { return JSON.parse(localStorage.getItem('doti-agency-live-v4') || 'null'); } catch (_) { return null; }
+  })();
+  state.clients = (operation?.clients || []).map(client => ({ id: client.id, name: client.name }));
   if (action === 'list') return JSON.parse(JSON.stringify(state));
 
   if (action === 'invite') {
@@ -140,11 +148,17 @@ function localTeamRequest(action, body = {}) {
       throw new Error('Este e-mail ja faz parte da equipe local.');
     }
     const id = `local-member-${Date.now()}`;
+    const role = body?.role || 'member';
+    const clientId = role === 'client' ? String(body?.clientId || '') : null;
+    const client = state.clients.find(item => item.id === clientId);
+    if (role === 'client' && !client) throw new Error('Escolha o cliente deste acesso.');
     state.members.push({
       id,
       email,
       full_name: String(body?.fullName || 'Pessoa de teste').trim(),
-      role: body?.role || 'member',
+      role,
+      client_id: clientId,
+      client_name: client?.name || '',
       is_active: true,
       created_at: new Date().toISOString()
     });
@@ -152,7 +166,8 @@ function localTeamRequest(action, body = {}) {
       id: `local-invite-${Date.now()}`,
       email,
       full_name: String(body?.fullName || 'Pessoa de teste').trim(),
-      role: body?.role || 'member',
+      role,
+      client_id: clientId,
       status: 'pending',
       created_at: new Date().toISOString()
     });
@@ -166,7 +181,15 @@ function localTeamRequest(action, body = {}) {
     if (body.role != null && !member.is_active) {
       throw new Error('Reative a pessoa antes de alterar o nivel de acesso.');
     }
-    if (body.role != null) member.role = body.role;
+    if (body.role != null) {
+      const nextRole = String(body.role);
+      const clientId = nextRole === 'client' ? String(body.clientId || '') : null;
+      const client = state.clients.find(item => item.id === clientId);
+      if (nextRole === 'client' && !client) throw new Error('Escolha o cliente deste acesso.');
+      member.role = nextRole;
+      member.client_id = clientId;
+      member.client_name = client?.name || '';
+    }
     if (body.isActive != null) member.is_active = Boolean(body.isActive);
     saveLocalTeam(state);
     return { message: 'Alteracao salva somente neste navegador.' };
@@ -238,8 +261,8 @@ function roleOptions(member) {
     return '<option value="owner">Proprietário</option>';
   }
   const roles = teamState.currentRole === 'owner'
-    ? ['admin', 'member', 'viewer']
-    : ['member', 'viewer'];
+    ? ['admin', 'member', 'viewer', 'client']
+    : ['member', 'viewer', 'client'];
   return roles
     .map(role => `<option value="${role}" ${member.role === role ? 'selected' : ''}>${roleLabels[role]}</option>`)
     .join('');
@@ -281,7 +304,9 @@ function renderMembers() {
         </div>
         <div class="team-role-copy">
           <strong>${escapeHtml(roleLabels[member.role] || member.role)}</strong>
-          <small>${escapeHtml(roleDescriptions[member.role] || '')}</small>
+          <small>${escapeHtml(member.role === 'client' && member.client_name
+            ? `Vinculado a ${member.client_name}`
+            : roleDescriptions[member.role] || '')}</small>
         </div>
         <label class="team-role-select">
           <span>Nível</span>
@@ -291,6 +316,7 @@ function renderMembers() {
           <i></i>${invitePending ? 'Convidado' : member.is_active ? 'Ativo' : 'Desativado'}
         </div>
         <div class="team-actions">
+          ${member.role === 'client' && !protectedMember ? `<button class="team-client-link" type="button" data-change-client>Alterar cliente</button>` : ''}
           <button class="team-access-toggle" type="button" data-toggle-access
             ${protectedMember ? 'disabled' : ''}
             aria-label="${member.is_active ? 'Desativar' : 'Reativar'} acesso de ${escapeHtml(member.full_name)}">
@@ -399,7 +425,12 @@ function openInviteModal() {
             <label><input type="radio" name="role" value="admin"><span><i>02</i><b>Administrador</b><small>Gerencia operação e equipe</small></span></label>` : ''}
           <label><input type="radio" name="role" value="member" checked><span><i>03</i><b>Membro</b><small>Cria e atualiza o trabalho</small></span></label>
           <label><input type="radio" name="role" value="viewer"><span><i>04</i><b>Visualizador</b><small>Acompanha sem alterar</small></span></label>
+          <label><input type="radio" name="role" value="client"><span><i>05</i><b>Cliente da agência</b><small>Aprova somente os próprios projetos</small></span></label>
         </fieldset>
+        <label class="team-client-picker" hidden>Cliente vinculado
+          <select name="clientId"><option value="">Escolha o cliente</option>${teamState.clients.map(client => `<option value="${escapeHtml(client.id)}">${escapeHtml(client.name)}</option>`).join('')}</select>
+          <small>Esta pessoa verá apenas aprovações dos projetos deste cliente.</small>
+        </label>
         <div class="team-modal-status" role="alert"></div>
       </div>
       <footer>
@@ -429,7 +460,8 @@ function openInviteModal() {
     const result = await teamRequest('invite', {
         fullName: data.get('fullName'),
         email: data.get('email'),
-        role: data.get('role')
+        role: data.get('role'),
+        clientId: data.get('clientId')
       });
       closeModal(modal);
       showTeamNotice('Convite enviado', result.message);
@@ -441,7 +473,52 @@ function openInviteModal() {
       submit.textContent = 'Enviar convite →';
     }
   });
+  const clientPicker = form.querySelector('.team-client-picker');
+  const syncClientPicker = () => {
+    const clientRole = form.querySelector('input[name="role"]:checked')?.value === 'client';
+    clientPicker.hidden = !clientRole;
+    clientPicker.querySelector('select').required = clientRole;
+  };
+  form.querySelectorAll('input[name="role"]').forEach(input => input.addEventListener('change', syncClientPicker));
+  syncClientPicker();
   form.elements.fullName.focus();
+}
+
+function openClientAssignmentModal(member) {
+  if (!teamState.clients.length) {
+    showTeamNotice('Nenhum cliente cadastrado', 'Cadastre um cliente antes de criar este acesso.', true);
+    return;
+  }
+  const modal = document.createElement('div');
+  modal.className = 'doti-modal team-client-assignment-modal';
+  modal.innerHTML = `<form>
+    <header><div><p class="eyebrow">ACESSO DO CLIENTE</p><h2>Vincular cliente</h2></div><button type="button" data-close-modal aria-label="Fechar">&times;</button></header>
+    <div class="modal-body"><p class="team-invite-intro">${escapeHtml(member.full_name)} verá somente aprovações dos projetos do cliente escolhido.</p><label>Cliente<select name="clientId" required><option value="">Escolha o cliente</option>${teamState.clients.map(client => `<option value="${escapeHtml(client.id)}" ${client.id === member.client_id ? 'selected' : ''}>${escapeHtml(client.name)}</option>`).join('')}</select></label><div class="team-modal-status" role="alert"></div></div>
+    <footer><button type="button" class="cancel" data-close-modal>Cancelar</button><button type="submit" class="primary-btn">Salvar vínculo</button></footer>
+  </form>`;
+  document.body.appendChild(modal);
+  modal.querySelectorAll('[data-close-modal]').forEach(button => button.addEventListener('click', () => closeModal(modal)));
+  modal.addEventListener('click', event => { if (event.target === modal) closeModal(modal); });
+  modal.querySelector('form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const submit = form.querySelector('[type="submit"]');
+    const status = form.querySelector('.team-modal-status');
+    submit.disabled = true;
+    try {
+      const result = await teamRequest('update_member', {
+        memberId: member.id,
+        role: 'client',
+        clientId: form.elements.namedItem('clientId').value
+      });
+      closeModal(modal);
+      showTeamNotice('Cliente vinculado', result.message);
+      await loadTeam();
+    } catch (error) {
+      status.textContent = error.message;
+      submit.disabled = false;
+    }
+  });
 }
 
 membersContainer.addEventListener('change', async event => {
@@ -455,6 +532,11 @@ membersContainer.addEventListener('change', async event => {
     return;
   }
   select.disabled = true;
+  if (select.value === 'client') {
+    select.disabled = false;
+    openClientAssignmentModal(member);
+    return;
+  }
   try {
     const result = await teamRequest('update_member', {
       memberId: row.dataset.memberId,
@@ -469,6 +551,13 @@ membersContainer.addEventListener('change', async event => {
 });
 
 membersContainer.addEventListener('click', async event => {
+  const changeClientButton = event.target.closest('[data-change-client]');
+  if (changeClientButton) {
+    const row = changeClientButton.closest('[data-member-id]');
+    const member = teamState.members.find(item => item.id === row.dataset.memberId);
+    if (member) openClientAssignmentModal(member);
+    return;
+  }
   const removeButton = event.target.closest('[data-remove-member]');
   if (removeButton) {
     const row = removeButton.closest('[data-member-id]');

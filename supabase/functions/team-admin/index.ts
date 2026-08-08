@@ -20,16 +20,18 @@ const ROLE_LABELS: Record<string, string> = {
   owner: 'Proprietário',
   admin: 'Administrador',
   member: 'Membro',
-  viewer: 'Visualizador'
+  viewer: 'Visualizador',
+  client: 'Cliente da agência'
 };
 
 type Profile = {
   id: string;
   agency_id: string;
+  client_id: string | null;
   email: string;
   full_name: string;
   agency_name: string;
-  role: 'owner' | 'admin' | 'member' | 'viewer';
+  role: 'owner' | 'admin' | 'member' | 'viewer' | 'client';
   is_active: boolean;
   avatar_url: string | null;
 };
@@ -116,7 +118,7 @@ async function authenticatedUser(request: Request) {
 
 async function profileForUser(userId: string): Promise<Profile> {
   const profiles = await adminRequest(
-    `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,agency_id,email,full_name,agency_name,role,is_active,avatar_url&limit=1`
+    `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,agency_id,client_id,email,full_name,agency_name,role,is_active,avatar_url&limit=1`
   );
   const profile = profiles?.[0];
   if (!profile?.is_active) {
@@ -167,15 +169,31 @@ async function updateProfile(request: Request, body: Record<string, unknown>) {
 
 async function listTeam(profile: Profile) {
   const agencyId = encodeURIComponent(profile.agency_id);
-  const [members, invitations] = await Promise.all([
+  const [members, invitations, clients] = await Promise.all([
     adminRequest(
-      `/rest/v1/profiles?agency_id=eq.${agencyId}&select=id,email,full_name,avatar_url,role,is_active,created_at&order=created_at.asc`
+      `/rest/v1/profiles?agency_id=eq.${agencyId}&select=id,email,full_name,avatar_url,role,client_id,is_active,created_at&order=created_at.asc`
     ),
     adminRequest(
-      `/rest/v1/team_invitations?agency_id=eq.${agencyId}&status=eq.pending&select=id,email,full_name,role,status,expires_at,created_at&order=created_at.desc`
+      `/rest/v1/team_invitations?agency_id=eq.${agencyId}&status=eq.pending&select=id,email,full_name,role,client_id,status,expires_at,created_at&order=created_at.desc`
+    ),
+    adminRequest(
+      `/rest/v1/clients?agency_id=eq.${agencyId}&select=id,name&order=name.asc`
     )
   ]);
-  return { members, invitations, currentUserId: profile.id, currentRole: profile.role };
+  const clientsById = new Map(clients.map((client: { id: string; name: string }) => [client.id, client.name]));
+  return {
+    members: members.map((member: Record<string, unknown>) => ({
+      ...member,
+      client_name: clientsById.get(String(member.client_id || '')) || ''
+    })),
+    invitations: invitations.map((invitation: Record<string, unknown>) => ({
+      ...invitation,
+      client_name: clientsById.get(String(invitation.client_id || '')) || ''
+    })),
+    clients,
+    currentUserId: profile.id,
+    currentRole: profile.role
+  };
 }
 
 function invitationRedirect(request: Request) {
@@ -186,6 +204,7 @@ async function inviteMember(request: Request, profile: Profile, body: Record<str
   const email = String(body.email || '').trim().toLowerCase();
   const fullName = String(body.fullName || '').trim();
   const role = String(body.role || 'member');
+  const clientId = role === 'client' ? String(body.clientId || '') : '';
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new HttpError(400, 'Informe um e-mail válido.');
@@ -193,11 +212,18 @@ async function inviteMember(request: Request, profile: Profile, body: Record<str
   if (fullName.length < 2 || fullName.length > 120) {
     throw new HttpError(400, 'Informe o nome completo da pessoa.');
   }
-  if (!['admin', 'member', 'viewer'].includes(role)) {
+  if (!['admin', 'member', 'viewer', 'client'].includes(role)) {
     throw new HttpError(400, 'Nível de acesso inválido.');
   }
   if (profile.role !== 'owner' && role === 'admin') {
     throw new HttpError(403, 'Somente o proprietário pode convidar administradores.');
+  }
+  if (role === 'client') {
+    if (!clientId) throw new HttpError(400, 'Escolha o cliente deste acesso.');
+    const clients = await adminRequest(
+      `/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}&agency_id=eq.${encodeURIComponent(profile.agency_id)}&select=id&limit=1`
+    );
+    if (!clients.length) throw new HttpError(400, 'O cliente escolhido não pertence a esta agência.');
   }
 
   const existing = await adminRequest(
@@ -217,6 +243,7 @@ async function inviteMember(request: Request, profile: Profile, body: Record<str
       email,
       full_name: fullName,
       role,
+      client_id: clientId || null,
       invited_by: profile.id
     })
   });
@@ -245,13 +272,13 @@ async function inviteMember(request: Request, profile: Profile, body: Record<str
 
   return {
     message: `Convite enviado para ${email}.`,
-    invitation: { id: invitationId, email, full_name: fullName, role }
+    invitation: { id: invitationId, email, full_name: fullName, role, client_id: clientId || null }
   };
 }
 
 async function memberInAgency(profile: Profile, memberId: string) {
   const matches = await adminRequest(
-    `/rest/v1/profiles?id=eq.${encodeURIComponent(memberId)}&agency_id=eq.${encodeURIComponent(profile.agency_id)}&select=id,email,role,is_active&limit=1`
+    `/rest/v1/profiles?id=eq.${encodeURIComponent(memberId)}&agency_id=eq.${encodeURIComponent(profile.agency_id)}&select=id,email,role,client_id,is_active&limit=1`
   );
   const member = matches?.[0];
   if (!member) throw new HttpError(404, 'Membro não encontrado.');
@@ -284,17 +311,29 @@ async function setAuthActive(memberId: string, isActive: boolean) {
 async function updateMember(profile: Profile, body: Record<string, unknown>) {
   const memberId = String(body.memberId || '');
   const role = body.role == null ? null : String(body.role);
+  const clientId = role === 'client' ? String(body.clientId || '') : null;
   const isActive = body.isActive == null ? null : Boolean(body.isActive);
   if (!memberId) throw new HttpError(400, 'Membro inválido.');
-  if (role !== null && !['admin', 'member', 'viewer'].includes(role)) {
+  if (role !== null && !['admin', 'member', 'viewer', 'client'].includes(role)) {
     throw new HttpError(400, 'Nível de acesso inválido.');
   }
 
   const member = await memberInAgency(profile, memberId);
   assertCanManageMember(profile, member, role);
 
+  if (role === 'client') {
+    if (!clientId) throw new HttpError(400, 'Escolha o cliente deste acesso.');
+    const clients = await adminRequest(
+      `/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}&agency_id=eq.${encodeURIComponent(profile.agency_id)}&select=id&limit=1`
+    );
+    if (!clients.length) throw new HttpError(400, 'O cliente escolhido não pertence a esta agência.');
+  }
+
   const changes: Record<string, unknown> = {};
-  if (role !== null) changes.role = role;
+  if (role !== null) {
+    changes.role = role;
+    changes.client_id = role === 'client' ? clientId : null;
+  }
   if (isActive !== null) changes.is_active = isActive;
   if (!Object.keys(changes).length) {
     throw new HttpError(400, 'Nenhuma alteração informada.');
