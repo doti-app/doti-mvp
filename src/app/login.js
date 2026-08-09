@@ -210,7 +210,7 @@ async function handleSignup() {
   }
 
   showConfirmationResend(email);
-  showStatus('Conta criada. Enviamos um link para confirmar seu e-mail.', 'success');
+  showStatus('Enviamos um link para confirmar este e-mail. Se já havia um cadastro pendente, use o mesmo link para continuar.', 'success');
 }
 
 async function handleResendConfirmation() {

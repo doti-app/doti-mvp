@@ -57,7 +57,7 @@ test('novo cadastro pendente permite reenviar a confirmação', async ({ page })
 
   await submitSignup(page);
 
-  await expect(page.locator('#loginStatus')).toContainText('Conta criada. Enviamos um link para confirmar seu e-mail.');
+  await expect(page.locator('#loginStatus')).toContainText('Enviamos um link para confirmar este e-mail.');
   await expect(page.locator('#loginEmail')).toHaveValue('ana@agencia.test');
   await expect(page.locator('#resendConfirmation')).toBeVisible();
 
@@ -83,6 +83,20 @@ test('tentativa repetida mostra a conta existente e não informa sucesso de cada
   await expect(page.locator('#loginStatus')).toContainText('Este e-mail já possui uma conta');
   await expect(page.locator('#loginStatus')).not.toContainText('Conta criada');
   await expect(page.locator('#forgotPassword')).toBeVisible();
+  await expect(page.locator('#resendConfirmation')).toBeVisible();
+});
+
+test('conta pendente existente não é apresentada como conta recém-criada', async ({ page }) => {
+  await mockLoginAuth(page, {
+    signupData: { session: null, user: { id: 'pending-user', identities: [{ id: 'email-identity' }] } }
+  });
+
+  await submitSignup(page, 'pendente@agencia.test');
+
+  await expect(page.locator('#loginTitle')).toContainText(/Bem-vindo\s*de volta/);
+  await expect(page.locator('#loginEmail')).toHaveValue('pendente@agencia.test');
+  await expect(page.locator('#loginStatus')).toContainText('Se já havia um cadastro pendente');
+  await expect(page.locator('#loginStatus')).not.toContainText('Conta criada');
   await expect(page.locator('#resendConfirmation')).toBeVisible();
 });
 
