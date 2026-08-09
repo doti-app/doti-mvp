@@ -84,6 +84,7 @@ button,input{font:inherit}
 .login-form-status.visible{display:block;animation:noticeIn .25s ease}
 .login-form-status.success{background:#e0f2e9;color:#146b49;border-left-color:#1a9b65}
 .login-form-status.info{background:#e5eafa;color:#29479e;border-left-color:#496ddd}
+.confirmation-resend{align-self:flex-start;margin:-7px 0 -5px}
 .login-submit:disabled,.demo-access:disabled{cursor:wait;opacity:.7}
 .login-experience [hidden]{display:none!important}
 .secondary-action{margin-top:-7px}

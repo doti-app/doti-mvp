@@ -17,6 +17,7 @@ const secondaryAction = document.getElementById('secondaryAction');
 const secondaryLabel = secondaryAction.querySelector('span');
 const statusBox = document.getElementById('loginStatus');
 const forgotButton = document.getElementById('forgotPassword');
+const resendConfirmationButton = document.getElementById('resendConfirmation');
 const title = document.getElementById('loginTitle');
 const kicker = document.getElementById('loginKicker');
 const description = document.getElementById('loginDescription');
@@ -24,6 +25,8 @@ const query = new URLSearchParams(location.search);
 
 let mode = ['reset', 'invite'].includes(query.get('mode')) ? query.get('mode') : 'login';
 let supabase;
+let confirmationEmail = '';
+let confirmationResendForExistingAccount = false;
 
 const modeContent = {
   login: {
@@ -73,9 +76,24 @@ function clearStatus() {
   statusBox.className = 'login-form-status';
 }
 
+function hideConfirmationResend() {
+  confirmationEmail = '';
+  confirmationResendForExistingAccount = false;
+  resendConfirmationButton.hidden = true;
+  resendConfirmationButton.disabled = false;
+}
+
+function showConfirmationResend(email, forExistingAccount = false) {
+  confirmationEmail = email;
+  confirmationResendForExistingAccount = forExistingAccount;
+  resendConfirmationButton.hidden = false;
+  resendConfirmationButton.disabled = false;
+}
+
 function setBusy(busy) {
   submitButton.disabled = busy;
   secondaryAction.disabled = busy;
+  resendConfirmationButton.disabled = busy;
   submitButton.classList.toggle('loading', busy);
 }
 
@@ -101,6 +119,7 @@ function setMode(nextMode) {
   document.querySelector('.password-field').hidden = ['recovery'].includes(mode);
 
   passwordInput.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
+  hideConfirmationResend();
   clearStatus();
   form.querySelectorAll('.invalid').forEach(field => field.classList.remove('invalid'));
   const focusTarget = ['reset', 'invite'].includes(mode) ? passwordInput : mode === 'signup' ? fullNameInput : emailInput;
@@ -132,7 +151,9 @@ function translateAuthError(error) {
   if (message.includes('email not confirmed')) return 'Confirme seu e-mail antes de entrar.';
   if (message.includes('user already registered')) return 'Este e-mail já possui uma conta.';
   if (message.includes('password')) return 'A senha precisa ter pelo menos 8 caracteres.';
-  if (message.includes('rate limit')) return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+  if (message.includes('rate limit') || message.includes('too many requests')) {
+    return 'Aguarde alguns minutos antes de pedir outro e-mail de confirmação.';
+  }
   return error?.message || 'Não foi possível concluir a operação. Tente novamente.';
 }
 
@@ -159,8 +180,9 @@ async function handleSignup() {
   agencyNameInput.closest('.login-field').classList.toggle('invalid', !agencyValid);
   if (!nameValid || !agencyValid || !validateEmail() || !validatePassword(true)) return;
 
+  const email = emailInput.value.trim();
   const { data, error } = await supabase.auth.signUp({
-    email: emailInput.value.trim(),
+    email,
     password: passwordInput.value,
     options: {
       emailRedirectTo: authUrl('confirmed=1'),
@@ -176,9 +198,40 @@ async function handleSignup() {
     location.replace(await authenticatedDestination());
     return;
   }
+
   form.reset();
   setMode('login');
+  emailInput.value = email;
+
+  if (Array.isArray(data.user?.identities) && data.user.identities.length === 0) {
+    showConfirmationResend(email, true);
+    showStatus('Este e-mail já possui uma conta. Entre ou recupere sua senha. Se ela ainda não foi confirmada, reenvie o e-mail de confirmação.', 'info');
+    return;
+  }
+
+  showConfirmationResend(email);
   showStatus('Conta criada. Enviamos um link para confirmar seu e-mail.', 'success');
+}
+
+async function handleResendConfirmation() {
+  if (!confirmationEmail) return;
+  resendConfirmationButton.disabled = true;
+  try {
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: confirmationEmail,
+      options: { emailRedirectTo: authUrl('confirmed=1') }
+    });
+    if (error) throw error;
+    const message = confirmationResendForExistingAccount
+      ? 'Se esta conta ainda estiver pendente de confirmação, enviamos um novo link. Confira sua caixa de entrada e também o spam.'
+      : 'Novo e-mail de confirmação enviado. Confira sua caixa de entrada e também o spam.';
+    showStatus(message, 'success');
+  } catch (error) {
+    showStatus(translateAuthError(error));
+  } finally {
+    resendConfirmationButton.disabled = false;
+  }
 }
 
 async function handleRecovery() {
@@ -239,6 +292,7 @@ secondaryAction.addEventListener('click', async () => {
 });
 
 forgotButton.addEventListener('click', () => setMode('recovery'));
+resendConfirmationButton.addEventListener('click', handleResendConfirmation);
 
 document.getElementById('passwordToggle').addEventListener('click', event => {
   const showing = passwordInput.type === 'text';
@@ -250,6 +304,9 @@ document.getElementById('passwordToggle').addEventListener('click', event => {
 form.querySelectorAll('input').forEach(input => {
   input.addEventListener('input', () => {
     input.closest('.login-field').classList.remove('invalid');
+    if (input === emailInput && confirmationEmail && emailInput.value.trim().toLowerCase() !== confirmationEmail.toLowerCase()) {
+      hideConfirmationResend();
+    }
     clearStatus();
   });
 });
