@@ -40,14 +40,24 @@ async function mockLoginAuth(page, { signupData, resendError = null }) {
 }
 
 async function submitSignup(page, email = 'ana@agencia.test') {
+  const password = 'senha-segura';
   await page.goto('/dot-admin/');
+  await expect(page.locator('#secondaryAction')).toBeEnabled();
   await page.locator('#secondaryAction').click();
+  await expect(page.locator('#fullName')).toBeVisible();
+  await expect(page.locator('#agencyName')).toBeVisible();
   await page.locator('#fullName').fill('Ana da Silva');
+  await expect(page.locator('#fullName')).toHaveValue('Ana da Silva');
   await page.locator('#agencyName').fill('Agência Aurora');
+  await expect(page.locator('#agencyName')).toHaveValue('Agência Aurora');
   await page.locator('#loginEmail').fill(email);
-  await page.locator('#loginPassword').fill('senha-segura');
-  await page.locator('#confirmPassword').fill('senha-segura');
-  await page.locator('#loginForm').evaluate(form => form.requestSubmit());
+  await expect(page.locator('#loginEmail')).toHaveValue(email);
+  await page.locator('#loginPassword').fill(password);
+  await expect(page.locator('#loginPassword')).toHaveValue(password);
+  await page.locator('#confirmPassword').fill(password);
+  await expect(page.locator('#confirmPassword')).toHaveValue(password);
+  await page.locator('#loginForm button[type="submit"]').click();
+  await expect.poll(() => page.evaluate(() => window.__authCalls.signUp.length)).toBe(1);
 }
 
 test('novo cadastro pendente permite reenviar a confirmação', async ({ page }) => {
