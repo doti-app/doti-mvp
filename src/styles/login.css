@@ -297,7 +297,7 @@ button, input { font: inherit; }
 .demo-access small {
   color: #9f8200;
   font-size: inherit;
-  font-style: italic;
+  font-style: normal;
   font-weight: 700;
 }
 .demo-access span { text-decoration: underline; text-underline-offset: 2px; }
