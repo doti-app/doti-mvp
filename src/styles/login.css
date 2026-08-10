@@ -247,7 +247,7 @@ button, input { font: inherit; }
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 4px;
+  margin-top: 10px;
   padding: 0 8px 0 17px;
   overflow: hidden;
   border: 0;
@@ -286,7 +286,7 @@ button, input { font: inherit; }
   align-items: center;
   gap: 5px;
   height: auto;
-  margin: -8px 0 0 7px;
+  margin: -2px 0 0 7px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -303,7 +303,7 @@ button, input { font: inherit; }
 .demo-access span { text-decoration: underline; text-underline-offset: 2px; }
 .demo-access:hover { color: #000; }
 .demo-access b { display: none; }
-.secondary-action { margin-top: -8px; }
+.secondary-action { margin-top: -2px; }
 
 .login-form-status {
   display: none;
