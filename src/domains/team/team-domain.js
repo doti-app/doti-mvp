@@ -199,6 +199,12 @@ function localTeamRequest(action, body = {}) {
     return { message: `Convite simulado para ${email}. Nenhum e-mail foi enviado.` };
   }
 
+  if (action === 'resend_invitation') {
+    const invitation = state.invitations.find(item => item.id === body?.invitationId && item.status === 'pending');
+    if (!invitation) throw new Error('Convite pendente local não encontrado.');
+    return { message: `Reenvio simulado para ${invitation.email}. Nenhum e-mail foi enviado.` };
+  }
+
   if (action === 'update_member') {
     const member = state.members.find(item => item.id === body?.memberId);
     if (!member) throw new Error('Membro local nao encontrado.');
@@ -312,9 +318,10 @@ function renderMembers() {
 
   membersContainer.innerHTML = members.map(member => {
     const isCurrent = member.id === teamState.currentUserId;
-    const invitePending = teamState.invitations.some(
+    const pendingInvitation = teamState.invitations.find(
       invitation => invitation.email.toLowerCase() === member.email.toLowerCase()
     );
+    const invitePending = Boolean(pendingInvitation);
     const protectedMember =
       isCurrent ||
       member.role === 'owner' ||
@@ -340,6 +347,7 @@ function renderMembers() {
           <i></i>${invitePending ? 'Convidado' : member.is_active ? 'Ativo' : 'Desativado'}
         </div>
         <div class="team-actions">
+          ${invitePending && !protectedMember && !authContext?.supportMode ? `<button class="team-resend-invitation" type="button" data-resend-invitation="${escapeHtml(pendingInvitation.id)}">Reenviar e-mail</button>` : ''}
           ${member.role === 'client' && !protectedMember ? `<button class="team-client-link" type="button" data-change-client>Alterar cliente</button>` : ''}
           <button class="team-access-toggle" type="button" data-toggle-access
             ${protectedMember ? 'disabled' : ''}
@@ -597,6 +605,22 @@ membersContainer.addEventListener('change', async event => {
 });
 
 membersContainer.addEventListener('click', async event => {
+  const resendButton = event.target.closest('[data-resend-invitation]');
+  if (resendButton) {
+    const invitationId = resendButton.dataset.resendInvitation;
+    resendButton.disabled = true;
+    resendButton.textContent = 'Reenviando…';
+    try {
+      const result = await teamRequest('resend_invitation', { invitationId });
+      showTeamNotice('E-mail reenviado', result.message);
+    } catch (error) {
+      showTeamNotice('Reenvio não realizado', error.message, true);
+    } finally {
+      resendButton.disabled = false;
+      resendButton.textContent = 'Reenviar e-mail';
+    }
+    return;
+  }
   const changeClientButton = event.target.closest('[data-change-client]');
   if (changeClientButton) {
     const row = changeClientButton.closest('[data-member-id]');

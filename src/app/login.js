@@ -18,6 +18,7 @@ const secondaryLabel = secondaryAction.querySelector('span');
 const statusBox = document.getElementById('loginStatus');
 const forgotButton = document.getElementById('forgotPassword');
 const resendConfirmationButton = document.getElementById('resendConfirmation');
+const confirmAuthLinkButton = document.getElementById('confirmAuthLink');
 const title = document.getElementById('loginTitle');
 const kicker = document.getElementById('loginKicker');
 const description = document.getElementById('loginDescription');
@@ -27,6 +28,8 @@ let mode = ['reset', 'invite'].includes(query.get('mode')) ? query.get('mode') :
 let supabase;
 let confirmationEmail = '';
 let confirmationResendForExistingAccount = false;
+let authLinkTokenHash = query.get('token_hash') || '';
+let authLinkType = query.get('type') || '';
 
 const modeContent = {
   login: {
@@ -94,7 +97,25 @@ function setBusy(busy) {
   submitButton.disabled = busy;
   secondaryAction.disabled = busy;
   resendConfirmationButton.disabled = busy;
+  confirmAuthLinkButton.disabled = busy;
   submitButton.classList.toggle('loading', busy);
+  confirmAuthLinkButton.classList.toggle('loading', busy);
+}
+
+function hasPendingAuthLink() {
+  const expectedType = mode === 'invite' ? 'invite' : mode === 'reset' ? 'recovery' : '';
+  return Boolean(expectedType && authLinkType === expectedType && /^[A-Za-z0-9_-]{20,}$/.test(authLinkTokenHash));
+}
+
+function updatePendingAuthLinkState() {
+  const pending = hasPendingAuthLink();
+  document.querySelector('.password-field').hidden = mode === 'recovery' || pending;
+  document.querySelectorAll('.confirm-only').forEach(field => {
+    field.hidden = !['signup', 'reset', 'invite'].includes(mode) || pending;
+  });
+  confirmAuthLinkButton.hidden = !pending;
+  submitButton.hidden = pending;
+  secondaryAction.hidden = pending;
 }
 
 function setMode(nextMode) {
@@ -109,20 +130,19 @@ function setMode(nextMode) {
   document.querySelectorAll('.signup-only').forEach(field => {
     field.hidden = mode !== 'signup';
   });
-  document.querySelectorAll('.confirm-only').forEach(field => {
-    field.hidden = !['signup', 'reset', 'invite'].includes(mode);
-  });
   document.querySelectorAll('.login-only').forEach(field => {
     field.hidden = mode !== 'login';
   });
   document.querySelector('.email-field').hidden = ['reset', 'invite'].includes(mode);
-  document.querySelector('.password-field').hidden = ['recovery'].includes(mode);
+  updatePendingAuthLinkState();
 
   passwordInput.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
   hideConfirmationResend();
   clearStatus();
   form.querySelectorAll('.invalid').forEach(field => field.classList.remove('invalid'));
-  const focusTarget = ['reset', 'invite'].includes(mode) ? passwordInput : mode === 'signup' ? fullNameInput : emailInput;
+  const focusTarget = hasPendingAuthLink()
+    ? confirmAuthLinkButton
+    : ['reset', 'invite'].includes(mode) ? passwordInput : mode === 'signup' ? fullNameInput : emailInput;
   setTimeout(() => focusTarget.focus(), 50);
 }
 
@@ -267,6 +287,26 @@ async function handleInvite() {
   location.replace(context?.platform?.isActive ? '/doti/' : '/');
 }
 
+async function confirmAuthLink() {
+  if (!hasPendingAuthLink()) return;
+  const { error } = await supabase.auth.verifyOtp({
+    token_hash: authLinkTokenHash,
+    type: authLinkType
+  });
+  if (error) throw error;
+
+  authLinkTokenHash = '';
+  authLinkType = '';
+  history.replaceState({}, document.title, `${location.pathname}?mode=${encodeURIComponent(mode)}`);
+  setMode(mode);
+  showStatus(
+    mode === 'invite'
+      ? 'Convite confirmado. Agora defina sua senha para ativar o acesso.'
+      : 'Link confirmado. Agora defina sua nova senha.',
+    'success'
+  );
+}
+
 form.addEventListener('submit', async event => {
   event.preventDefault();
   clearStatus();
@@ -293,6 +333,17 @@ secondaryAction.addEventListener('click', async () => {
 
 forgotButton.addEventListener('click', () => setMode('recovery'));
 resendConfirmationButton.addEventListener('click', handleResendConfirmation);
+confirmAuthLinkButton.addEventListener('click', async () => {
+  clearStatus();
+  setBusy(true);
+  try {
+    await confirmAuthLink();
+  } catch (error) {
+    showStatus(translateAuthError(error));
+  } finally {
+    setBusy(false);
+  }
+});
 
 document.getElementById('passwordToggle').addEventListener('click', event => {
   const showing = passwordInput.type === 'text';
@@ -326,7 +377,9 @@ async function initialize() {
       location.replace(await authenticatedDestination());
       return;
     }
-    if (mode === 'invite' && !session) {
+    if (hasPendingAuthLink()) {
+      showStatus('Confirme o convite abaixo para continuar com segurança.', 'info');
+    } else if (mode === 'invite' && !session) {
       setMode('login');
       showStatus('Este convite é inválido ou expirou. Peça um novo convite ao administrador.', 'info');
     }

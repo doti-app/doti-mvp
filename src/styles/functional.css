@@ -103,6 +103,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .team-remove-member{border:0;background:transparent;padding:3px 0;font-size:9px;font-weight:700;color:#b43a2b;text-decoration:underline;cursor:pointer}
 .team-remove-member:hover{color:#7f2118}
 .team-client-link{border:0;background:transparent;padding:3px 0;font-size:9px;font-weight:700;color:#6b5600;text-decoration:underline;cursor:pointer}.team-client-link:hover{color:#111}.team-client-picker{margin-top:12px!important}.team-client-picker[hidden]{display:none!important}.team-client-picker small{font-size:8px;color:#777;font-weight:400}.team-client-assignment-modal>form{width:min(480px,100%)}
+.team-resend-invitation{border:0;background:transparent;padding:3px 0;font-size:9px;font-weight:700;color:#29479e;text-decoration:underline;cursor:pointer}.team-resend-invitation:hover{color:#111}.team-resend-invitation:disabled{cursor:wait;opacity:.55;text-decoration:none}
 .team-access-guide{background:#ffd400;border-radius:15px;padding:20px;position:sticky;top:78px;overflow:hidden}
 .team-access-guide>.eyebrow{position:relative;z-index:1;color:#111}
 .team-access-guide:after{content:"";position:absolute;width:220px;height:220px;border:1px solid #111;border-radius:50%;right:-125px;top:-152px;box-shadow:0 0 0 24px #111}
