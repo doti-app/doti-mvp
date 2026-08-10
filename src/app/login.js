@@ -21,6 +21,7 @@ const resendConfirmationButton = document.getElementById('resendConfirmation');
 const title = document.getElementById('loginTitle');
 const kicker = document.getElementById('loginKicker');
 const description = document.getElementById('loginDescription');
+const illustration = document.getElementById('loginIllustration');
 const query = new URLSearchParams(location.search);
 
 let mode = ['reset', 'invite'].includes(query.get('mode')) ? query.get('mode') : 'login';
@@ -105,6 +106,13 @@ function setMode(nextMode) {
   description.textContent = content.description;
   submitLabel.textContent = content.submit;
   secondaryLabel.textContent = content.secondary;
+  const signupMode = mode === 'signup';
+  illustration.src = signupMode
+    ? '/assets/login-signup-illustration.png'
+    : '/assets/login-illustration.png';
+  illustration.alt = signupMode
+    ? 'Ilustração de uma profissional conectando pessoas'
+    : 'Ilustração de uma profissional diante de uma fechadura';
 
   document.querySelectorAll('.signup-only').forEach(field => {
     field.hidden = mode !== 'signup';

@@ -43,7 +43,9 @@ async function submitSignup(page, email = 'ana@agencia.test') {
   const password = 'senha-segura';
   await page.goto('/dot-admin/');
   await expect(page.locator('#secondaryAction')).toBeEnabled();
+  await expect(page.locator('#loginIllustration')).toHaveAttribute('src', '/assets/login-illustration.png');
   await page.locator('#secondaryAction').click();
+  await expect(page.locator('#loginIllustration')).toHaveAttribute('src', '/assets/login-signup-illustration.png');
   await expect(page.locator('#fullName')).toBeVisible();
   await expect(page.locator('#agencyName')).toBeVisible();
   await page.locator('#fullName').fill('Ana da Silva');
