@@ -264,19 +264,16 @@ button, input { font: inherit; }
   align-items: center;
   justify-content: flex-end;
   height: 100%;
-  min-width: 43px;
+  min-width: 44px;
   transform: translateX(10px);
   transition: transform .25s ease;
 }
-.login-submit-arrows i {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
-  margin-left: -8px;
-  border-top: 3px solid #fff;
-  border-right: 3px solid #fff;
-  filter: drop-shadow(1px 0 0 #050607) drop-shadow(0 1px 0 #050607);
-  transform: rotate(45deg);
+.login-submit-arrows img {
+  width: 44px;
+  height: 44px;
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
 }
 .login-submit:hover {
   box-shadow: 0 7px 0 rgba(28,42,53,.18);
