@@ -95,3 +95,91 @@ button,input{font:inherit}
 @media(max-width:980px){.login-experience{grid-template-columns:1fr 430px}.login-story{padding:30px}.login-story-copy h1{font-size:66px}.workflow-visual{right:-2vw;width:45vw}.floating-card-main{width:34vw}.login-story-bottom small{display:none}}
 @media(max-width:760px){body{overflow:auto}.login-experience{position:relative;display:block;min-height:100dvh}.login-story{display:none}.login-panel{padding:28px 24px 24px}.login-panel-inner{margin:auto}.mobile-login-brand{display:flex;align-items:center;justify-content:space-between;margin-bottom:70px}.mobile-login-brand img{width:82px;filter:brightness(0)}.mobile-login-brand span{font-size:8px;letter-spacing:.12em;font-weight:800}.login-heading{margin-bottom:34px}.login-heading h2{font-size:48px}.login-footer{margin-top:55px}.login-submit:hover{transform:none;box-shadow:none}}
 @media(prefers-reduced-motion:reduce){.orbit-two,.floating-card,.login-submit.loading b{animation:none!important}.login-experience,.login-submit,.login-field>div{transition:none!important}}
+
+/* Visual layer: richer depth and responsive interaction without changing auth behavior. */
+.login-experience{--pointer-x:62%;--pointer-y:58%;overflow:hidden}
+.login-story{--pointer-x:62%;--pointer-y:58%;background:
+  radial-gradient(circle at 70% 16%,rgba(255,255,255,.48),transparent 29%),
+  linear-gradient(145deg,#ffe342 0%,var(--login-yellow) 52%,#f1c900 100%)}
+.login-spotlight{position:absolute;z-index:1;inset:0;pointer-events:none;opacity:.72;background:radial-gradient(circle 330px at var(--pointer-x) var(--pointer-y),rgba(255,255,255,.38),transparent 72%);transition:background .12s linear}
+.login-grid{position:absolute;z-index:1;inset:0;pointer-events:none;background-image:linear-gradient(rgba(17,17,15,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(17,17,15,.045) 1px,transparent 1px);background-size:64px 64px;mask-image:linear-gradient(135deg,transparent 22%,#000 65%,transparent 100%);opacity:.6}
+.login-story:before{animation:storyPulse 12s ease-in-out infinite alternate}
+.login-story-top{animation:revealDown .7s cubic-bezier(.2,.8,.2,1) both}
+.login-story-copy{animation:revealUp .8s .08s cubic-bezier(.2,.8,.2,1) both}
+.login-story-copy h1{max-width:760px;text-wrap:balance;text-shadow:0 1px 0 rgba(255,255,255,.15)}
+.login-story-copy h1 em{position:relative;display:inline-block}
+.login-story-copy h1 em:after{content:"";position:absolute;left:2%;right:-3%;height:8px;bottom:-5px;background:#111;border-radius:100%;transform:scaleX(0) rotate(-1deg);transform-origin:left;animation:drawLine .9s .75s cubic-bezier(.2,.8,.2,1) forwards}
+.login-edition{padding:9px 12px;border:1px solid rgba(17,17,15,.18);border-radius:999px;background:rgba(255,255,255,.22);backdrop-filter:blur(8px)}
+.login-edition i{animation:editionPulse 1.8s ease-out infinite}
+.workflow-visual{--tilt-x:0deg;--tilt-y:0deg;perspective:1000px;transform:rotateX(var(--tilt-x)) rotateY(var(--tilt-y));transform-style:preserve-3d;transition:transform .55s cubic-bezier(.2,.8,.2,1);animation:revealVisual 1s .24s cubic-bezier(.2,.8,.2,1) both}
+.floating-card{backdrop-filter:blur(12px);box-shadow:0 24px 70px rgba(66,55,0,.18),0 2px 0 rgba(255,255,255,.8) inset;transition:box-shadow .35s ease,border-color .35s ease}
+.workflow-visual:hover .floating-card-main{box-shadow:0 34px 90px rgba(66,55,0,.27),0 2px 0 rgba(255,255,255,.9) inset}
+.floating-card-main{border-radius:20px;transform:translateZ(40px) rotate(-2.5deg)}
+.floating-card-step{transform:translateZ(75px) rotate(3deg)}
+.floating-card-alert{transform:translateZ(90px) rotate(4deg)}
+.floating-card-signal{right:7%;bottom:0;padding:11px 14px;display:flex;align-items:center;gap:10px;transform:translateZ(100px) rotate(-2deg);animation:cardFloat 5.2s ease-in-out .3s infinite}
+.floating-card-signal div{display:flex;flex-direction:column}.floating-card-signal small{font-size:7px;letter-spacing:.12em;color:#888;font-weight:800}.floating-card-signal strong{font-size:10px;margin-top:3px}
+.signal-bars{height:27px;display:flex;align-items:flex-end;gap:3px}.signal-bars i{display:block;width:4px;border-radius:5px;background:#111}.signal-bars i:first-child{height:35%}.signal-bars i:nth-child(2){height:65%;background:#d3b100}.signal-bars i:last-child{height:100%;background:#1a9b65}
+.progress-track i{position:relative;overflow:hidden}.progress-track i:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);transform:translateX(-100%);animation:progressShine 2.8s ease-in-out infinite}
+.spark{animation:sparkPulse 2.4s ease-in-out infinite}.spark-two{animation-delay:.8s}
+
+.login-panel{isolation:isolate;background:
+  linear-gradient(rgba(17,17,15,.025) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(17,17,15,.025) 1px,transparent 1px),
+  var(--login-cream);background-size:42px 42px}
+.login-panel:before{content:"";position:absolute;z-index:-1;left:0;top:0;width:4px;height:100%;background:linear-gradient(180deg,#ffd500 0 31%,transparent 31% 34%,#111 34% 100%)}
+.panel-glow{position:absolute;z-index:-1;width:420px;height:420px;right:-210px;top:-180px;border-radius:50%;background:rgba(255,213,0,.12);filter:blur(1px)}
+.login-panel-inner{position:relative;animation:panelIn .85s .12s cubic-bezier(.2,.8,.2,1) both}
+.workspace-status{display:inline-flex;align-items:center;gap:7px;margin:0 0 17px;padding:7px 10px 7px 8px;border:1px solid #deddd4;border-radius:999px;background:rgba(255,255,255,.7);font-size:8px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#5f5f58}
+.workspace-status i{width:7px;height:7px;border-radius:50%;background:#1a9b65;box-shadow:0 0 0 4px rgba(26,155,101,.12);animation:workspacePulse 2s ease-out infinite}
+.login-heading .login-kicker{margin-top:0!important}
+.login-heading h2{font-weight:700;text-wrap:balance}
+.login-heading h2 span{display:inline-block;animation:dotBounce 2.3s 1s ease-in-out infinite}
+.login-field>div{position:relative;overflow:hidden;border-radius:2px;box-shadow:0 8px 24px transparent}
+.login-field>div:after{content:"";position:absolute;left:0;right:100%;bottom:0;height:3px;background:var(--login-yellow);transition:right .35s cubic-bezier(.2,.8,.2,1)}
+.login-field>div:focus-within{box-shadow:0 12px 30px rgba(17,17,15,.08);transform:translateY(-2px)}
+.login-field>div:focus-within:after{right:0}
+.login-field>div:focus-within svg{stroke:#111;transform:scale(1.08)}
+.login-field svg{transition:stroke .25s,transform .25s}
+.password-toggle{position:relative;z-index:2;border-radius:50%}.password-toggle:hover{background:#f1f0e9}
+.forgot-link{transition:color .2s}.forgot-link:hover{color:#a88900}
+.login-submit,.demo-access{position:relative;overflow:hidden}
+.login-submit:before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 25%,rgba(255,255,255,.16) 47%,transparent 68%);transform:translateX(-120%);transition:transform .7s ease}
+.login-submit:hover:before{transform:translateX(120%)}
+.login-submit b,.demo-access b{position:relative;z-index:1;display:grid;place-items:center;width:29px;height:29px;border-radius:50%;transition:transform .25s ease,background .25s ease}
+.login-submit:hover b{background:#ffd500;color:#111;transform:translateX(3px)}
+.demo-access:hover b{transform:translate(2px,-2px)}
+.login-confidence{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:24px;padding-top:18px;border-top:1px solid #dddcd4}
+.login-confidence span{display:flex;flex-direction:column;gap:5px;font-size:7px;letter-spacing:.04em;text-transform:uppercase;color:#7c7b74;font-weight:700}
+.login-confidence i{font-style:normal;font-size:8px;color:#b39600}
+.login-support{margin-top:18px}
+.login-footer{position:relative;z-index:1}
+
+@keyframes revealDown{from{opacity:0;transform:translateY(-16px)}}
+@keyframes revealUp{from{opacity:0;transform:translateY(26px)}}
+@keyframes revealVisual{from{opacity:0;transform:translateY(32px) scale(.96)}}
+@keyframes panelIn{from{opacity:0;transform:translateX(25px)}}
+@keyframes drawLine{to{transform:scaleX(1) rotate(-1deg)}}
+@keyframes storyPulse{to{transform:scale(1.025) translate(1.5vw,1.5vw)}}
+@keyframes editionPulse{60%,100%{box-shadow:0 0 0 11px transparent}}
+@keyframes workspacePulse{60%,100%{box-shadow:0 0 0 10px transparent}}
+@keyframes progressShine{0%,45%{transform:translateX(-100%)}75%,100%{transform:translateX(100%)}}
+@keyframes sparkPulse{50%{transform:rotate(45deg) scale(1.25)}}
+@keyframes dotBounce{0%,72%,100%{transform:translateY(0)}80%{transform:translateY(-7px)}88%{transform:translateY(0)}}
+
+@media(max-width:1100px){.floating-card-signal{display:none}.login-confidence{gap:5px}.login-confidence span{font-size:6px}}
+@media(max-width:760px){
+  .login-experience{background:var(--login-yellow);padding-top:8px}
+  .login-grid{display:block;position:fixed;opacity:.25}
+  .login-spotlight{display:none}
+  .login-panel{min-height:calc(100dvh - 8px);border-radius:24px 24px 0 0;padding:25px 24px 22px;background:radial-gradient(circle at 90% 4%,rgba(255,213,0,.18),transparent 24%),var(--login-cream)}
+  .login-panel:before{display:none}.panel-glow{display:none}
+  .mobile-login-brand{margin-bottom:46px}
+  .mobile-login-brand span{display:flex;align-items:center;gap:7px}.mobile-login-brand span:before{content:"";width:6px;height:6px;border-radius:50%;background:#1a9b65;box-shadow:0 0 0 4px rgba(26,155,101,.12)}
+  .workspace-status{margin-bottom:15px}
+  .login-heading h2{font-size:clamp(44px,13vw,58px)}
+  .login-confidence{margin-top:22px}
+  .login-footer{margin-top:38px}
+}
+@media(max-width:420px){.login-panel{padding-inline:19px}.mobile-login-brand{margin-bottom:34px}.login-heading{margin-bottom:29px}.login-form{gap:15px}.login-confidence span:last-child{display:none}.login-confidence{grid-template-columns:repeat(2,1fr)}}
+@media(prefers-reduced-motion:reduce){.login-story:before,.login-story-top,.login-story-copy,.workflow-visual,.login-panel-inner,.login-story-copy h1 em:after,.login-edition i,.workspace-status i,.progress-track i:after,.spark,.login-heading h2 span{animation:none!important}.login-story-copy h1 em:after{transform:scaleX(1) rotate(-1deg)}}
