@@ -48,9 +48,61 @@ export function isClientActionStep(step, groups = []) {
     || groups.some(group => group.id === step?.groupId && group.isClientGroup === true);
 }
 
+/** @param {unknown} value */
+function normalizedStepName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+/** @param {any} step */
+function isAdjustmentStep(step) {
+  return /\bajustes?\b/.test(normalizedStepName(step?.name));
+}
+
 /**
- * Manual moves are useful for correcting a card's position, but can never
- * bypass the audited customer approval stage.
+ * A rejected client approval can send the work to an immediately following
+ * “Ajustes” stage. Once that work is complete, it must be submitted for a new
+ * client decision instead of continuing to the final-delivery stage.
+ *
+ * @param {any} deliverable
+ * @param {any[]} [groups]
+ */
+export function requiresClientReapprovalAfterCurrentStep(deliverable, groups = []) {
+  const currentIndex = Number(deliverable?.stepIndex);
+  const steps = deliverable?.steps || [];
+  if (!Number.isInteger(currentIndex) || currentIndex < 1 || !isAdjustmentStep(steps[currentIndex])) return false;
+
+  const approvalStep = steps[currentIndex - 1];
+  if (!isClientActionStep(approvalStep, groups)) return false;
+
+  const latestDecision = [...(deliverable?.approvalDecisions || [])]
+    .filter(decision => decision?.stepId === approvalStep.id)
+    .sort((left, right) => String(right?.decidedAt || '').localeCompare(String(left?.decidedAt || '')))[0];
+
+  return latestDecision?.decision === 'rejected'
+    && Number(latestDecision?.fromStepPosition) === currentIndex - 1
+    && Number(latestDecision?.toStepPosition) === currentIndex;
+}
+
+/**
+ * Returns the next stage after completing the current stage. Adjustments that
+ * came from a client rejection return to the protected client-approval stage.
+ *
+ * @param {any} deliverable
+ * @param {any[]} [groups]
+ */
+export function nextStepIndexAfterCompletion(deliverable, groups = []) {
+  return requiresClientReapprovalAfterCurrentStep(deliverable, groups)
+    ? Number(deliverable.stepIndex) - 1
+    : Number(deliverable.stepIndex) + 1;
+}
+
+/**
+ * Manual moves may withdraw work from a pending client approval so unfinished
+ * material is no longer visible to the client. They can never enter or pass
+ * the audited customer approval stage.
  * @param {any} deliverable
  * @param {number} targetIndex
  * @param {any[]} [groups]
@@ -63,7 +115,8 @@ export function canMoveDeliverableToStep(deliverable, targetIndex, groups = []) 
     || targetIndex < 0
     || targetIndex >= steps.length
     || targetIndex === currentIndex) return false;
-  if (isClientActionStep(steps[currentIndex], groups) || isClientActionStep(steps[targetIndex], groups)) return false;
+  if (isClientActionStep(steps[targetIndex], groups)) return false;
+  if (isClientActionStep(steps[currentIndex], groups)) return targetIndex < currentIndex;
   return targetIndex < currentIndex
     || !steps.slice(currentIndex + 1, targetIndex + 1).some(step => isClientActionStep(step, groups));
 }

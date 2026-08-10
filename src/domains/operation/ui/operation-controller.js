@@ -34,8 +34,10 @@ import {
   dateIsPast as selectDateIsPast,
   effectiveDeadline as selectEffectiveDeadline,
   macroStatus as selectMacroStatus,
+  nextStepIndexAfterCompletion as selectNextStepIndexAfterCompletion,
   nextStepDeadline as selectNextStepDeadline,
   overdueDeadline as selectOverdueDeadline,
+  requiresClientReapprovalAfterCurrentStep as selectRequiresClientReapprovalAfterCurrentStep,
   stepDeadlinesFromCurrent as selectStepDeadlines
 } from '../domain/selectors.js';
 import { createModalService } from '../../../shared/ui/modal-service.js';
@@ -235,6 +237,12 @@ function stepDeadlinesFromCurrent(deliverable) {
 }
 function nextStepDeadline(deliverable) {
   return selectNextStepDeadline(deliverable);
+}
+function nextStepIndexAfterCompletion(deliverable) {
+  return selectNextStepIndexAfterCompletion(deliverable, state.groups);
+}
+function requiresClientReapprovalAfterCurrentStep(deliverable) {
+  return selectRequiresClientReapprovalAfterCurrentStep(deliverable, state.groups);
 }
 function effectiveDeadline(deliverable) {
   return selectEffectiveDeadline(deliverable, projectById);
@@ -1098,8 +1106,8 @@ function openDeliverable(id) {
     <div class="observation-links" data-observation-links ${observationLinksForDisplay(deliverable.note, deliverable.links).length ? '' : 'hidden'}>${renderObservationLinks(deliverable.note, deliverable.links)}</div>
     ${renderDeliverableAttachments(deliverable)}
     ${renderApprovalDecisionHistory(deliverable)}
-    ${isClientApprovalStep ? '<div class="approval-readonly-note">Esta etapa exige uma decisão auditada. Use a área <strong>Aprovações</strong> para aprovar ou solicitar ajustes.</div>' : ''}
-    <div class="schedule-head"><div><span class="modal-section-title">CRONOGRAMA DAS ETAPAS</span><small>${isClientApprovalStep ? 'Esta aprovação é decidida na área Aprovações.' : 'Clique em uma etapa para mover a demanda. Etapas de cliente continuam protegidas.'}</small></div>${milestone ? `<b>Próximo: ${escapeHtml(milestone.step.name)} · ${formatDate(milestone.due)}</b>` : '<b>Nenhuma data definida</b>'}</div>
+    ${isClientApprovalStep ? '<div class="approval-readonly-note">A decisão é registrada na área <strong>Aprovações</strong>. Se o material ainda não estiver pronto, clique em uma etapa anterior para retirá-lo da fila do cliente.</div>' : ''}
+    <div class="schedule-head"><div><span class="modal-section-title">CRONOGRAMA DAS ETAPAS</span><small>${isClientApprovalStep ? 'Use Aprovações para decidir ou clique em uma etapa anterior para devolver a demanda ao time.' : 'Clique em uma etapa para mover a demanda. Etapas de cliente continuam protegidas.'}</small></div>${milestone ? `<b>Próximo: ${escapeHtml(milestone.step.name)} · ${formatDate(milestone.due)}</b>` : '<b>Nenhuma data definida</b>'}</div>
     <div class="step-timeline compact-timeline">${deliverable.steps.map((item, index) => {
       const moveAllowed = canMoveToStep(index);
       const groupName = groupById(item.groupId).name;
@@ -1128,13 +1136,23 @@ function openDeliverable(id) {
       notify('Há tarefas pendentes', 'Conclua todas as tarefas antes de avançar.', '!');
       return false;
     }
-    if (deliverable.stepIndex < deliverable.steps.length - 1) {
-      deliverable.stepIndex += 1;
+    const nextStepIndex = nextStepIndexAfterCompletion(deliverable);
+    if (nextStepIndex < deliverable.steps.length) {
+      const returningForReapproval = requiresClientReapprovalAfterCurrentStep(deliverable);
+      deliverable.stepIndex = nextStepIndex;
       deliverable.status = 'active';
       project.updatedAt = new Date().toISOString();
-      logActivity('Etapa concluída', `${deliverable.name} → ${currentStep(deliverable).name}`);
+      logActivity(
+        returningForReapproval ? 'Ajustes concluídos' : 'Etapa concluída',
+        `${deliverable.name} → ${currentStep(deliverable).name}`
+      );
       saveState();
-      notify('Etapa concluída', `Agora em ${currentStep(deliverable).name}.`);
+      notify(
+        returningForReapproval ? 'Ajustes concluídos' : 'Etapa concluída',
+        returningForReapproval
+          ? `Agora em ${currentStep(deliverable).name}, aguardando nova aprovação do cliente.`
+          : `Agora em ${currentStep(deliverable).name}.`
+      );
     } else {
       deliverable.status = 'done';
       project.updatedAt = new Date().toISOString();
@@ -1143,7 +1161,7 @@ function openDeliverable(id) {
       notify('Entregável concluído', `${deliverable.name} foi finalizado.`);
     }
     return true;
-  }, deliverable.status === 'done' || isClientApprovalStep ? 'Salvar observação' : isApprovalStep ? 'Aprovar e avançar' : deliverable.stepIndex === deliverable.steps.length - 1 ? 'Concluir entregável' : 'Concluir etapa e avançar', form => {
+  }, deliverable.status === 'done' || isClientApprovalStep ? 'Salvar observação' : isApprovalStep ? 'Aprovar e avançar' : requiresClientReapprovalAfterCurrentStep(deliverable) ? 'Concluir ajustes e reenviar para aprovação' : deliverable.stepIndex === deliverable.steps.length - 1 ? 'Concluir entregável' : 'Concluir etapa e avançar', form => {
     if (isApprovalStep) {
       const rejectButton = document.createElement('button');
       rejectButton.type = 'button';
