@@ -240,16 +240,15 @@ button, input { font: inherit; }
 .forgot-link:hover { color: #c8a900; }
 
 .login-submit {
-  position: relative;
   align-self: flex-start;
   min-width: clamp(150px, 12vw, 175px);
   height: clamp(41px, 5.3vh, 49px);
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 8px;
   margin-top: 10px;
-  padding: 0 55px 0 15px;
+  padding: 0 3px 0 15px;
   overflow: visible;
   border: 0;
   border-radius: 999px;
@@ -267,10 +266,8 @@ button, input { font: inherit; }
   transition: transform .68s cubic-bezier(.22,1,.36,1);
 }
 .login-submit b {
-  position: absolute;
+  position: relative;
   z-index: 2;
-  top: 0;
-  right: 3px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -279,8 +276,8 @@ button, input { font: inherit; }
   min-width: 52px;
   flex: 0 0 52px;
   transform: translateX(0);
-  will-change: right, transform;
-  transition: right .68s cubic-bezier(.22,1,.36,1), transform .68s cubic-bezier(.22,1,.36,1);
+  will-change: transform;
+  transition: transform .68s cubic-bezier(.22,1,.36,1);
 }
 .login-submit-arrows img {
   position: absolute;
@@ -298,14 +295,27 @@ button, input { font: inherit; }
   transform: none;
 }
 .login-submit:hover > span { transform: translateX(52px); }
-.login-submit:hover b {
-  right: calc(100% - 49px);
-  transform: none;
-}
+.login-submit:hover b { transform: translateX(-120px); }
 .login-submit:active { box-shadow: none; transform: none; }
 .login-submit.loading span { font-size: 0; }
 .login-submit.loading span::after { content: 'Abrindo seu espaço…'; font-size: 11px; }
 .login-submit.loading b { animation: arrowPulse .7s ease-in-out infinite alternate; }
+
+.login-form[data-mode="recovery"] .login-submit {
+  position: relative;
+  justify-content: flex-start;
+  padding-right: 55px;
+}
+.login-form[data-mode="recovery"] .login-submit b {
+  position: absolute;
+  top: 0;
+  right: 3px;
+  transition: right .68s cubic-bezier(.22,1,.36,1), transform .68s cubic-bezier(.22,1,.36,1);
+}
+.login-form[data-mode="recovery"] .login-submit:hover b {
+  right: calc(100% - 49px);
+  transform: none;
+}
 
 .demo-access {
   align-self: flex-start;

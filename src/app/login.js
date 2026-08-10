@@ -100,6 +100,7 @@ function setBusy(busy) {
 
 function setMode(nextMode) {
   mode = nextMode;
+  form.dataset.mode = mode;
   const content = modeContent[mode];
   kicker.textContent = content.kicker;
   title.innerHTML = content.title;
