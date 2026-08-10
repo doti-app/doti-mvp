@@ -259,8 +259,14 @@ button, input { font: inherit; }
   cursor: pointer;
   transition: transform .2s ease, box-shadow .2s ease;
 }
+.login-submit > span {
+  position: relative;
+  z-index: 1;
+  transition: transform .42s cubic-bezier(.2,.8,.2,1);
+}
 .login-submit b {
   position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -269,7 +275,7 @@ button, input { font: inherit; }
   min-width: 52px;
   flex: 0 0 52px;
   transform: translateX(0);
-  transition: transform .25s ease;
+  transition: transform .42s cubic-bezier(.2,.8,.2,1);
 }
 .login-submit-arrows img {
   position: absolute;
@@ -283,11 +289,12 @@ button, input { font: inherit; }
   transform: translateY(-50%);
 }
 .login-submit:hover {
-  box-shadow: 0 7px 0 rgba(28,42,53,.18);
-  transform: translateY(-2px);
+  box-shadow: none;
+  transform: none;
 }
-.login-submit:hover b { transform: translateX(4px); }
-.login-submit:active { box-shadow: none; transform: translateY(1px); }
+.login-submit:hover > span { transform: translateX(52px); }
+.login-submit:hover b { transform: translateX(-98px); }
+.login-submit:active { box-shadow: none; transform: none; }
 .login-submit.loading span { font-size: 0; }
 .login-submit.loading span::after { content: 'Abrindo seu espaço…'; font-size: 11px; }
 .login-submit.loading b { animation: arrowPulse .7s ease-in-out infinite alternate; }
@@ -404,5 +411,5 @@ button, input { font: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .login-story-top, .login-illustration, .login-panel, .login-submit.loading b, .login-notice { animation: none !important; }
-  .login-field > div, .login-submit, .login-submit b { transition: none !important; }
+  .login-field > div, .login-submit, .login-submit > span, .login-submit b { transition: none !important; }
 }
