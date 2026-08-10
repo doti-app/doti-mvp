@@ -105,7 +105,7 @@ button, input { font: inherit; }
 .login-heading h2 {
   margin: 0 0 8px;
   color: var(--login-ink);
-  font-family: 'ADA Hybrid', 'ADA Hybrd', 'DM Sans', Arial, sans-serif;
+  font-family: 'Space Grotesk', 'DM Sans', Arial, sans-serif;
   font-size: clamp(30px, 2.55vw, 42px);
   font-weight: 500;
   line-height: 1.04;
