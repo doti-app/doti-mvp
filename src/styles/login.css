@@ -105,7 +105,7 @@ button,input{font:inherit}
 .login-grid{position:absolute;z-index:1;inset:0;pointer-events:none;background-image:linear-gradient(rgba(17,17,15,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(17,17,15,.045) 1px,transparent 1px);background-size:64px 64px;mask-image:linear-gradient(135deg,transparent 22%,#000 65%,transparent 100%);opacity:.6}
 .login-story:before{animation:storyPulse 12s ease-in-out infinite alternate}
 .login-story-top{animation:revealDown .7s cubic-bezier(.2,.8,.2,1) both}
-.login-story-copy{animation:revealUp .8s .08s cubic-bezier(.2,.8,.2,1) both}
+.login-story-copy{animation:revealUp .8s .08s cubic-bezier(.2,.8,.2,1) both;margin-top:clamp(88px,14vh,150px)}
 .login-story-copy h1{max-width:760px;text-wrap:balance;text-shadow:0 1px 0 rgba(255,255,255,.15)}
 .login-story-copy h1 em{position:relative;display:inline-block}
 .login-story-copy h1 em:after{content:"";position:absolute;left:2%;right:-3%;height:8px;bottom:-5px;background:#111;border-radius:100%;transform:scaleX(0) rotate(-1deg);transform-origin:left;animation:drawLine .9s .75s cubic-bezier(.2,.8,.2,1) forwards}
