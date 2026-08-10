@@ -14,6 +14,20 @@ const roleDescriptions = {
   client: 'Aprova somente os próprios projetos'
 };
 
+export function mergeClientCatalog(...catalogs) {
+  const clientsById = new Map();
+  catalogs.forEach(catalog => {
+    if (!Array.isArray(catalog)) return;
+    catalog.forEach(client => {
+      const id = String(client?.id || '').trim();
+      const name = String(client?.name || '').trim();
+      if (!id || !name || clientsById.has(id)) return;
+      clientsById.set(id, { id, name });
+    });
+  });
+  return [...clientsById.values()];
+}
+
 /** @param {{ auth: any, events?: EventTarget, document?: Document }} dependencies */
 export function createTeamDomain({ auth, events = new EventTarget(), document: documentRef = globalThis.document }) {
 const document = documentRef;
@@ -30,7 +44,7 @@ function normalizeTeamState(payload) {
   return {
     members: Array.isArray(payload?.members) ? payload.members : [],
     invitations: Array.isArray(payload?.invitations) ? payload.invitations : [],
-    clients: Array.isArray(payload?.clients) ? payload.clients : [],
+    clients: mergeClientCatalog(payload?.clients),
     currentUserId: String(payload?.currentUserId || authContext?.profile?.id || ''),
     currentRole: String(payload?.currentRole || authContext?.profile?.role || '')
   };
@@ -359,6 +373,13 @@ async function loadTeam() {
   }
 }
 
+async function refreshTeamClientCatalog() {
+  if (authContext?.localMode || typeof authContext?.supabase?.rpc !== 'function') return;
+  const { data, error } = await authContext.supabase.rpc('load_agency_state');
+  if (error) throw error;
+  teamState.clients = mergeClientCatalog(teamState.clients, data?.clients);
+}
+
 function closeModal(modal) {
   modal?.remove();
 }
@@ -411,7 +432,16 @@ function openRemoveMemberModal(member) {
   });
 }
 
-function openInviteModal() {
+async function openInviteModal() {
+  if (document.querySelector('.team-invite-modal')) return;
+  inviteButton.disabled = true;
+  try {
+    await refreshTeamClientCatalog();
+  } catch (error) {
+    console.warn('Não foi possível atualizar a lista de clientes para o convite.', error);
+  } finally {
+    inviteButton.disabled = false;
+  }
   if (document.querySelector('.team-invite-modal')) return;
   const canInviteAdmin = teamState.currentRole === 'owner';
   const modal = document.createElement('div');
@@ -495,7 +525,12 @@ function openInviteModal() {
   form.elements.fullName.focus();
 }
 
-function openClientAssignmentModal(member) {
+async function openClientAssignmentModal(member) {
+  try {
+    await refreshTeamClientCatalog();
+  } catch (error) {
+    console.warn('Não foi possível atualizar a lista de clientes para o vínculo.', error);
+  }
   if (!teamState.clients.length) {
     showTeamNotice('Nenhum cliente cadastrado', 'Cadastre um cliente antes de criar este acesso.', true);
     return;
