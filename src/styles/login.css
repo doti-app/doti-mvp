@@ -84,7 +84,7 @@ button, input { font: inherit; }
   position: absolute;
   z-index: 5;
   top: 19.5%;
-  right: 8.3%;
+  right: 10%;
   width: min(36vw, 510px);
   max-height: 71vh;
   min-width: 410px;
