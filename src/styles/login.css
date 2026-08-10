@@ -85,7 +85,7 @@ button, input { font: inherit; }
   z-index: 5;
   top: 19.5%;
   right: 8.3%;
-  width: min(39vw, 560px);
+  width: min(36vw, 510px);
   max-height: 71vh;
   min-width: 410px;
   overflow: auto;
@@ -105,6 +105,7 @@ button, input { font: inherit; }
 .login-heading h2 {
   margin: 0 0 8px;
   color: var(--login-ink);
+  font-family: 'ADA Hybrid', 'ADA Hybrd', 'DM Sans', Arial, sans-serif;
   font-size: clamp(30px, 2.55vw, 42px);
   font-weight: 500;
   line-height: 1.04;
@@ -114,7 +115,7 @@ button, input { font: inherit; }
 .login-heading > p:last-child {
   margin: 0;
   color: var(--login-muted);
-  font-size: clamp(8px, .72vw, 11px);
+  font-size: clamp(10px, .82vw, 13px);
   font-weight: 400;
 }
 
@@ -203,8 +204,10 @@ button, input { font: inherit; }
   display: flex;
   align-items: center;
   gap: 5px;
-  color: #3e4549;
+  color: var(--login-yellow);
   font-size: clamp(8px, .7vw, 10px);
+  font-style: italic;
+  font-weight: 600;
   cursor: pointer;
 }
 .remember-check input { position: absolute; opacity: 0; pointer-events: none; }
@@ -213,8 +216,8 @@ button, input { font: inherit; }
   height: 11px;
   display: grid;
   place-items: center;
-  border: 1px solid #bba000;
-  background: transparent;
+  border: 1px solid var(--login-yellow);
+  background: var(--login-yellow);
 }
 .remember-check input:checked + span::after {
   content: '✓';
@@ -226,14 +229,15 @@ button, input { font: inherit; }
   padding: 0;
   border: 0;
   background: none;
-  color: #3e4549;
+  color: var(--login-yellow);
   font-size: clamp(8px, .7vw, 10px);
+  font-style: italic;
   font-weight: 500;
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
 }
-.forgot-link:hover { color: #000; }
+.forgot-link:hover { color: #c8a900; }
 
 .login-submit {
   align-self: flex-start;
@@ -290,7 +294,12 @@ button, input { font: inherit; }
   font-size: clamp(8px, .7vw, 10px);
   cursor: pointer;
 }
-.demo-access small { font-size: inherit; }
+.demo-access small {
+  color: var(--login-yellow);
+  font-size: inherit;
+  font-style: italic;
+  font-weight: 700;
+}
 .demo-access span { text-decoration: underline; text-underline-offset: 2px; }
 .demo-access:hover { color: #000; }
 .demo-access b { display: none; }
