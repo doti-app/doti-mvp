@@ -31,10 +31,10 @@ let confirmationResendForExistingAccount = false;
 const modeContent = {
   login: {
     kicker: 'SEU ESPAÇO DE TRABALHO',
-    title: 'Bem-vindo<br>de volta<span>.</span>',
+    title: 'Seja bem-vindo!',
     description: 'Entre para continuar de onde sua equipe parou.',
     submit: 'Entrar na Doti',
-    secondary: 'Criar minha conta'
+    secondary: 'Criar sua conta'
   },
   signup: {
     kicker: 'COMECE SUA OPERAÇÃO',
@@ -303,7 +303,7 @@ document.getElementById('passwordToggle').addEventListener('click', event => {
 
 form.querySelectorAll('input').forEach(input => {
   input.addEventListener('input', () => {
-    input.closest('.login-field').classList.remove('invalid');
+    input.closest('.login-field')?.classList.remove('invalid');
     if (input === emailInput && confirmationEmail && emailInput.value.trim().toLowerCase() !== confirmationEmail.toLowerCase()) {
       hideConfirmationResend();
     }

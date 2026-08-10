@@ -12,69 +12,24 @@
 </head>
 <body>
   <main class="login-experience" id="loginExperience">
-    <div class="login-spotlight" aria-hidden="true"></div>
-    <div class="login-grid" aria-hidden="true"></div>
     <section class="login-story" aria-label="Conheça a Doti">
       <div class="login-story-top">
         <img class="login-logo" src="/assets/doti-logo.png" alt="Doti">
         <span class="login-edition"><i></i> Operação criativa, em um só lugar</span>
       </div>
-
-      <div class="login-story-copy">
-        <h1>Menos caos.<br><em>Mais fluxo.</em></h1>
-      </div>
-
-      <div class="workflow-visual" aria-label="Exemplo de fluxo de trabalho">
-        <div class="workflow-orbit orbit-one"></div>
-        <div class="workflow-orbit orbit-two"></div>
-        <article class="floating-card floating-card-main">
-          <header>
-            <span class="card-brand">NOVA CAMPANHA</span>
-            <span class="live-pill"><i></i> Em produção</span>
-          </header>
-          <h2>Lançamento de marca</h2>
-          <p>7 de 10 etapas concluídas</p>
-          <div class="progress-track"><i></i></div>
-          <footer>
-            <div class="avatar-stack"><b>MC</b><b>BR</b><b>+3</b></div>
-            <span>Entrega em 4 dias <strong>→</strong></span>
-          </footer>
-        </article>
-        <article class="floating-card floating-card-step">
-          <span class="step-icon">✓</span>
-          <div><small>ETAPA CONCLUÍDA</small><strong>Copy aprovada</strong></div>
-        </article>
-        <article class="floating-card floating-card-alert">
-          <small>PRÓXIMO PASSO</small>
-          <strong>Design final</strong>
-          <span><i></i> Hoje, 16:00</span>
-        </article>
-        <div class="spark spark-one">✦</div>
-        <div class="spark spark-two">✦</div>
-        <article class="floating-card floating-card-signal" aria-hidden="true">
-          <span class="signal-bars"><i></i><i></i><i></i></span>
-          <div><small>RITMO DA EQUIPE</small><strong>+24% esta semana</strong></div>
-        </article>
-      </div>
-
-      <div class="login-story-bottom">
-        <p>Projetos <span></span> Fluxos <span></span> Equipes <span></span> Clientes</p>
-        <small>Feito para agências que querem crescer sem perder o controle.</small>
-      </div>
+      <img class="login-illustration" src="/assets/login-illustration.png" alt="Ilustração de uma profissional diante de uma fechadura">
+      <div class="login-floor-lines" aria-hidden="true"><i></i><i></i><i></i></div>
     </section>
 
     <section class="login-panel">
-      <div class="panel-glow" aria-hidden="true"></div>
       <div class="login-panel-inner">
         <div class="mobile-login-brand">
           <img src="/assets/doti-logo.png" alt="Doti">
           <span>OPERAÇÃO CRIATIVA</span>
         </div>
         <div class="login-heading">
-          <span class="login-number">/ 01</span>
-          <span class="workspace-status"><i></i> Workspace online</span>
           <p class="login-kicker" id="loginKicker">SEU ESPAÇO DE TRABALHO</p>
-          <h2 id="loginTitle">Bem-vindo<br>de volta<span>.</span></h2>
+          <h2 id="loginTitle">Seja bem-vindo!</h2>
           <p id="loginDescription">Entre para continuar de onde sua equipe parou.</p>
         </div>
 
@@ -128,25 +83,16 @@
           </label>
 
           <div class="login-options login-only">
-            <span class="secure-session"><i>✓</i> Sessão protegida</span>
+            <label class="remember-check"><input type="checkbox" checked><span></span> Lembrar-me</label>
             <button class="forgot-link" type="button" id="forgotPassword">Esqueci minha senha</button>
           </div>
 
           <p class="login-form-status" id="loginStatus" role="alert" aria-live="polite"></p>
           <button class="forgot-link confirmation-resend" id="resendConfirmation" type="button" hidden>Reenviar e-mail de confirmação</button>
-          <button class="login-submit" type="submit"><span>Entrar na Doti</span><b>→</b></button>
-          <button class="demo-access secondary-action" type="button" id="secondaryAction"><span>Criar minha conta</span><b>↗</b></button>
+          <button class="login-submit" type="submit"><span>Entrar na Doti</span><b>❯❯❯</b></button>
+          <button class="demo-access secondary-action" type="button" id="secondaryAction"><small>ou</small><span>Criar sua conta</span></button>
         </form>
-
-        <div class="login-confidence" aria-label="Benefícios de segurança">
-          <span><i>01</i> Acesso seguro</span>
-          <span><i>02</i> Dados protegidos</span>
-          <span><i>03</i> Equipe sincronizada</span>
-        </div>
-
-        <p class="login-support" id="loginSupport">Ao continuar, você concorda com os termos de uso e privacidade da Doti.</p>
       </div>
-      <footer class="login-footer"><span>© 2026 Doti</span><span>Privacidade &nbsp;·&nbsp; Segurança</span></footer>
     </section>
   </main>
   <script src="/assets/vendor/supabase-2.57.4.js"></script>
