@@ -1,6 +1,5 @@
 :root {
   --login-yellow: #fddb35;
-  --login-yellow-deep: #efd024;
   --login-ink: #1c2a35;
   --login-card: #f7f8f9;
   --login-muted: #747a7d;
@@ -31,9 +30,7 @@ button, input { font: inherit; }
   inset: 0;
   min-height: 100dvh;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 21% 17%, rgba(255,255,255,.16), transparent 23%),
-    linear-gradient(180deg, #ffdf39 0%, var(--login-yellow) 77%, var(--login-yellow-deep) 77%, #f0d027 100%);
+  background: var(--login-yellow);
 }
 
 .login-story-top {
@@ -80,22 +77,6 @@ button, input { font: inherit; }
   pointer-events: none;
   user-select: none;
   animation: illustrationIn .9s .1s cubic-bezier(.2,.8,.2,1) both;
-}
-
-.login-floor-lines {
-  position: absolute;
-  z-index: 2;
-  left: 5.8vw;
-  right: 4vw;
-  bottom: 23.5%;
-  display: grid;
-  grid-template-columns: 1fr .78fr .62fr;
-  gap: 4.6vw;
-  pointer-events: none;
-}
-.login-floor-lines i {
-  height: 1px;
-  background: rgba(28,42,53,.5);
 }
 
 .login-panel {
@@ -367,7 +348,6 @@ button, input { font: inherit; }
   .login-logo { width: 82px; }
   .login-edition { font-size: 6px; }
   .login-illustration { left: -25vw; bottom: -3vh; width: 155vw; height: auto; opacity: .3; }
-  .login-floor-lines { display: none; }
   .login-panel {
     position: relative;
     top: auto;
