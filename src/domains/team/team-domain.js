@@ -26,6 +26,16 @@ const inviteButton = document.getElementById('inviteMemberButton');
 const membersContainer = document.getElementById('teamMembers');
 const teamSearch = document.getElementById('teamSearch');
 
+function normalizeTeamState(payload) {
+  return {
+    members: Array.isArray(payload?.members) ? payload.members : [],
+    invitations: Array.isArray(payload?.invitations) ? payload.invitations : [],
+    clients: Array.isArray(payload?.clients) ? payload.clients : [],
+    currentUserId: String(payload?.currentUserId || authContext?.profile?.id || ''),
+    currentRole: String(payload?.currentRole || authContext?.profile?.role || '')
+  };
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -336,7 +346,7 @@ async function loadTeam() {
   if (!authContext || !['owner', 'admin'].includes(authContext.profile.role)) return;
   membersContainer.innerHTML = '<div class="team-loading">Carregando equipe…</div>';
   try {
-    teamState = await teamRequest();
+    teamState = normalizeTeamState(await teamRequest());
     renderMetrics();
     renderMembers();
   } catch (error) {
@@ -402,6 +412,7 @@ function openRemoveMemberModal(member) {
 }
 
 function openInviteModal() {
+  if (document.querySelector('.team-invite-modal')) return;
   const canInviteAdmin = teamState.currentRole === 'owner';
   const modal = document.createElement('div');
   modal.className = 'doti-modal team-invite-modal';
