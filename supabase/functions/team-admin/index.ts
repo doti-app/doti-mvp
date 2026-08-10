@@ -200,6 +200,20 @@ function invitationRedirect(request: Request) {
   return `${allowedOrigin(request).replace(/\/$/, '')}/dot-admin/?mode=invite`;
 }
 
+function recoveryRedirect(request: Request) {
+  return `${allowedOrigin(request).replace(/\/$/, '')}/dot-admin/?mode=reset`;
+}
+
+async function refreshInvitationExpiry(invitationId: string) {
+  await adminRequest(`/rest/v1/team_invitations?id=eq.${encodeURIComponent(invitationId)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    })
+  });
+}
+
 async function inviteMember(request: Request, profile: Profile, body: Record<string, unknown>) {
   const email = String(body.email || '').trim().toLowerCase();
   const fullName = String(body.fullName || '').trim();
@@ -394,6 +408,51 @@ async function revokeInvitation(profile: Profile, body: Record<string, unknown>)
   return { message: 'Convite revogado.' };
 }
 
+async function resendInvitation(request: Request, profile: Profile, body: Record<string, unknown>) {
+  const invitationId = String(body.invitationId || '');
+  if (!invitationId) throw new HttpError(400, 'Convite inválido.');
+  const invitations = await adminRequest(
+    `/rest/v1/team_invitations?id=eq.${encodeURIComponent(invitationId)}&agency_id=eq.${encodeURIComponent(profile.agency_id)}&status=eq.pending&select=id,email,full_name,role,client_id&limit=1`
+  );
+  const invitation = invitations?.[0];
+  if (!invitation) throw new HttpError(404, 'Convite pendente não encontrado.');
+  if (profile.role !== 'owner' && invitation.role === 'admin') {
+    throw new HttpError(403, 'Somente o proprietário pode reenviar convites de administradores.');
+  }
+
+  const members = await adminRequest(
+    `/rest/v1/profiles?agency_id=eq.${encodeURIComponent(profile.agency_id)}&email=ilike.${encodeURIComponent(invitation.email)}&select=id&limit=1`
+  );
+
+  if (members?.length) {
+    await adminRequest(
+      `/auth/v1/recover?redirect_to=${encodeURIComponent(recoveryRedirect(request))}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ email: invitation.email })
+      }
+    );
+    await refreshInvitationExpiry(invitation.id);
+    return { message: `Novo link para criar a senha enviado para ${invitation.email}.` };
+  }
+
+  await adminRequest(
+    `/auth/v1/invite?redirect_to=${encodeURIComponent(invitationRedirect(request))}`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        email: invitation.email,
+        data: {
+          invitation_id: invitation.id,
+          full_name: invitation.full_name
+        }
+      })
+    }
+  );
+  await refreshInvitationExpiry(invitation.id);
+  return { message: `Novo convite enviado para ${invitation.email}.` };
+}
+
 async function acceptInvitation(request: Request) {
   const user = await authenticatedUser(request);
   const profile = await profileForUser(user.id);
@@ -439,6 +498,7 @@ Deno.serve(async request => {
     if (action === 'list') return json(request, 200, await listTeam(profile));
     if (action === 'invite') return json(request, 201, await inviteMember(request, profile, body));
     if (action === 'update_member') return json(request, 200, await updateMember(profile, body));
+    if (action === 'resend_invitation') return json(request, 200, await resendInvitation(request, profile, body));
     if (action === 'revoke_invitation') {
       return json(request, 200, await revokeInvitation(profile, body));
     }
