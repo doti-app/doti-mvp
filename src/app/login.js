@@ -11,7 +11,7 @@ const passwordInput = document.getElementById('loginPassword');
 const confirmPasswordInput = document.getElementById('confirmPassword');
 const fullNameInput = document.getElementById('fullName');
 const agencyNameInput = document.getElementById('agencyName');
-const submitButton = form.querySelector('.login-submit');
+const submitButton = form.querySelector('.login-submit[type="submit"]');
 const submitLabel = submitButton.querySelector('span');
 const secondaryAction = document.getElementById('secondaryAction');
 const secondaryLabel = secondaryAction.querySelector('span');
