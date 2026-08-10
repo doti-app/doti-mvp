@@ -241,14 +241,14 @@ button, input { font: inherit; }
 
 .login-submit {
   align-self: flex-start;
-  min-width: clamp(165px, 14vw, 200px);
+  min-width: clamp(150px, 12vw, 175px);
   height: clamp(41px, 5.3vh, 49px);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   margin-top: 10px;
-  padding: 0 8px 0 17px;
+  padding: 0 3px 0 15px;
   overflow: visible;
   border: 0;
   border-radius: 999px;
@@ -264,13 +264,13 @@ button, input { font: inherit; }
   align-items: center;
   justify-content: flex-end;
   height: 100%;
-  min-width: 44px;
-  transform: translateX(10px);
+  min-width: 52px;
+  transform: translateX(16px);
   transition: transform .25s ease;
 }
 .login-submit-arrows img {
-  width: 44px;
-  height: 44px;
+  width: 52px;
+  height: 52px;
   display: block;
   object-fit: contain;
   pointer-events: none;
@@ -279,7 +279,7 @@ button, input { font: inherit; }
   box-shadow: 0 7px 0 rgba(28,42,53,.18);
   transform: translateY(-2px);
 }
-.login-submit:hover b { transform: translateX(14px); }
+.login-submit:hover b { transform: translateX(20px); }
 .login-submit:active { box-shadow: none; transform: translateY(1px); }
 .login-submit.loading span { font-size: 0; }
 .login-submit.loading span::after { content: 'Abrindo seu espaço…'; font-size: 11px; }
