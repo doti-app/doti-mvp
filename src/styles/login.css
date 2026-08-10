@@ -262,7 +262,8 @@ button, input { font: inherit; }
 .login-submit > span {
   position: relative;
   z-index: 1;
-  transition: transform .42s cubic-bezier(.2,.8,.2,1);
+  will-change: transform;
+  transition: transform .68s cubic-bezier(.22,1,.36,1);
 }
 .login-submit b {
   position: relative;
@@ -275,7 +276,8 @@ button, input { font: inherit; }
   min-width: 52px;
   flex: 0 0 52px;
   transform: translateX(0);
-  transition: transform .42s cubic-bezier(.2,.8,.2,1);
+  will-change: transform;
+  transition: transform .68s cubic-bezier(.22,1,.36,1);
 }
 .login-submit-arrows img {
   position: absolute;
@@ -411,5 +413,5 @@ button, input { font: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .login-story-top, .login-illustration, .login-panel, .login-submit.loading b, .login-notice { animation: none !important; }
-  .login-field > div, .login-submit, .login-submit > span, .login-submit b { transition: none !important; }
+  .login-field > div, .login-submit { transition: none !important; }
 }
