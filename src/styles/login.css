@@ -204,7 +204,7 @@ button, input { font: inherit; }
   display: flex;
   align-items: center;
   gap: 5px;
-  color: var(--login-yellow);
+  color: #9f8200;
   font-size: clamp(8px, .7vw, 10px);
   font-style: italic;
   font-weight: 600;
@@ -229,7 +229,7 @@ button, input { font: inherit; }
   padding: 0;
   border: 0;
   background: none;
-  color: var(--login-yellow);
+  color: #9f8200;
   font-size: clamp(8px, .7vw, 10px);
   font-style: italic;
   font-weight: 500;
@@ -295,7 +295,7 @@ button, input { font: inherit; }
   cursor: pointer;
 }
 .demo-access small {
-  color: var(--login-yellow);
+  color: #9f8200;
   font-size: inherit;
   font-style: italic;
   font-weight: 700;
