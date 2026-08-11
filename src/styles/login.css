@@ -199,6 +199,10 @@ button, input { font: inherit; }
   font-size: clamp(10px, .86vw, 13px);
 }
 .login-field input::placeholder { color: rgba(17,17,17,.57); }
+.login-field input::-ms-reveal,
+.login-field input::-ms-clear {
+  display: none;
+}
 .password-toggle {
   flex: 0 0 auto;
   width: 28px;
