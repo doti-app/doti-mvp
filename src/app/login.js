@@ -9,6 +9,8 @@ const form = document.getElementById('loginForm');
 const emailInput = document.getElementById('loginEmail');
 const passwordInput = document.getElementById('loginPassword');
 const confirmPasswordInput = document.getElementById('confirmPassword');
+const passwordToggle = document.getElementById('passwordToggle');
+const confirmPasswordToggle = document.getElementById('confirmPasswordToggle');
 const fullNameInput = document.getElementById('fullName');
 const agencyNameInput = document.getElementById('agencyName');
 const submitButton = form.querySelector('.login-submit');
@@ -22,6 +24,8 @@ const title = document.getElementById('loginTitle');
 const kicker = document.getElementById('loginKicker');
 const description = document.getElementById('loginDescription');
 const illustration = document.getElementById('loginIllustration');
+const experience = document.getElementById('loginExperience');
+const panel = document.querySelector('.login-panel');
 const query = new URLSearchParams(location.search);
 
 let mode = ['reset', 'invite'].includes(query.get('mode')) ? query.get('mode') : 'login';
@@ -39,7 +43,7 @@ const modeContent = {
   },
   signup: {
     kicker: 'COMECE SUA OPERAÇÃO',
-    title: 'Crie sua<br>agência<span>.</span>',
+    title: 'Crie sua agência<span>.</span>',
     description: 'Configure sua identidade e convide a equipe depois.',
     submit: 'Criar conta',
     secondary: 'Já tenho uma conta'
@@ -101,6 +105,7 @@ function setBusy(busy) {
 function setMode(nextMode) {
   mode = nextMode;
   form.dataset.mode = mode;
+  panel.dataset.mode = mode;
   const content = modeContent[mode];
   kicker.textContent = content.kicker;
   title.innerHTML = content.title;
@@ -128,11 +133,57 @@ function setMode(nextMode) {
   document.querySelector('.password-field').hidden = ['recovery'].includes(mode);
 
   passwordInput.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
+  passwordInput.type = 'password';
+  confirmPasswordInput.type = 'password';
+  passwordToggle.setAttribute('aria-label', 'Mostrar senha');
+  confirmPasswordToggle.setAttribute('aria-label', 'Mostrar confirmação de senha');
   hideConfirmationResend();
   clearStatus();
   form.querySelectorAll('.invalid').forEach(field => field.classList.remove('invalid'));
   const focusTarget = ['reset', 'invite'].includes(mode) ? passwordInput : mode === 'signup' ? fullNameInput : emailInput;
   setTimeout(() => focusTarget.focus(), 50);
+}
+
+function delay(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+function preloadImage(src) {
+  return new Promise(resolve => {
+    const ImageConstructor = globalThis.Image;
+    if (!ImageConstructor) {
+      resolve();
+      return;
+    }
+    const image = new ImageConstructor();
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    image.addEventListener('load', finish, { once: true });
+    image.addEventListener('error', finish, { once: true });
+    image.src = src;
+    if (image.complete) finish();
+    setTimeout(finish, 500);
+  });
+}
+
+async function openSignupMode() {
+  secondaryAction.disabled = true;
+  experience.classList.add('mode-switching');
+  try {
+    await Promise.all([
+      preloadImage('/assets/login-signup-illustration.png'),
+      delay(260)
+    ]);
+    setMode('signup');
+    await delay(70);
+  } finally {
+    experience.classList.remove('mode-switching');
+    secondaryAction.disabled = false;
+  }
 }
 
 function validateEmail() {
@@ -297,17 +348,28 @@ secondaryAction.addEventListener('click', async () => {
   if (mode === 'invite') {
     await supabase?.auth.signOut();
   }
-  setMode(mode === 'login' ? 'signup' : 'login');
+  if (mode === 'login') {
+    await openSignupMode();
+    return;
+  }
+  setMode('login');
 });
 
 forgotButton.addEventListener('click', () => setMode('recovery'));
 resendConfirmationButton.addEventListener('click', handleResendConfirmation);
 
-document.getElementById('passwordToggle').addEventListener('click', event => {
+passwordToggle.addEventListener('click', event => {
   const showing = passwordInput.type === 'text';
   passwordInput.type = showing ? 'password' : 'text';
   event.currentTarget.setAttribute('aria-label', showing ? 'Mostrar senha' : 'Ocultar senha');
   passwordInput.focus();
+});
+
+confirmPasswordToggle.addEventListener('click', event => {
+  const showing = confirmPasswordInput.type === 'text';
+  confirmPasswordInput.type = showing ? 'password' : 'text';
+  event.currentTarget.setAttribute('aria-label', showing ? 'Mostrar confirmação de senha' : 'Ocultar confirmação de senha');
+  confirmPasswordInput.focus();
 });
 
 form.querySelectorAll('input').forEach(input => {

@@ -97,7 +97,33 @@ button, input { font: inherit; }
   animation: cardIn .78s .12s cubic-bezier(.2,.8,.2,1) both;
 }
 
-.login-panel-inner { width: 100%; }
+.login-panel-inner {
+  width: 100%;
+  transition: opacity .22s ease, transform .22s ease;
+}
+.login-panel::after {
+  content: '';
+  position: absolute;
+  z-index: 8;
+  top: 50%;
+  left: 50%;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border: 3px solid rgba(28,42,53,.15);
+  border-top-color: var(--login-ink);
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+.login-experience.mode-switching .login-panel-inner {
+  opacity: .18;
+  transform: scale(.985);
+}
+.login-experience.mode-switching .login-panel::after {
+  opacity: 1;
+  animation: modeSpinner .65s linear infinite;
+}
 .mobile-login-brand { display: none; }
 
 .login-heading { margin-bottom: clamp(27px, 3.2vh, 38px); }
@@ -163,6 +189,7 @@ button, input { font: inherit; }
 }
 .login-field input {
   width: 100%;
+  min-width: 0;
   height: 100%;
   padding: 0 11px;
   border: 0;
@@ -174,6 +201,8 @@ button, input { font: inherit; }
 .login-field input::placeholder { color: rgba(17,17,17,.57); }
 .password-toggle {
   flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
   padding: 5px;
@@ -384,6 +413,50 @@ button, input { font: inherit; }
 @keyframes cardIn { from { opacity: 0; transform: translateY(18px) scale(.98); } }
 @keyframes noticeIn { from { opacity: 0; transform: translateY(8px); } }
 @keyframes arrowPulse { to { transform: translateX(0); } }
+@keyframes modeSpinner { to { transform: rotate(360deg); } }
+
+@media (min-width: 761px) {
+  .login-panel[data-mode="signup"] {
+    top: 8%;
+    max-height: none;
+    overflow: visible;
+    padding-block: clamp(30px, 3.4vw, 46px);
+  }
+  .login-panel[data-mode="signup"] .login-heading {
+    margin-bottom: 22px;
+  }
+  .login-panel[data-mode="signup"] .login-heading h2 {
+    white-space: nowrap;
+  }
+  .login-form[data-mode="signup"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+  }
+  .login-form[data-mode="signup"] > :not(.password-field):not(.confirm-only) {
+    grid-column: 1 / -1;
+  }
+  .login-form[data-mode="signup"] .password-field,
+  .login-form[data-mode="signup"] .confirm-only {
+    min-width: 0;
+  }
+  .login-form[data-mode="signup"] .password-field > div,
+  .login-form[data-mode="signup"] .confirm-only > div {
+    padding-inline: 10px 6px;
+  }
+  .login-form[data-mode="signup"] .password-field input,
+  .login-form[data-mode="signup"] .confirm-only input {
+    padding-inline: 7px 3px;
+    font-size: clamp(9px, .76vw, 11px);
+  }
+  .login-form[data-mode="signup"] .login-submit {
+    margin-top: 4px;
+    justify-self: start;
+  }
+  .login-form[data-mode="signup"] .secondary-action {
+    justify-self: start;
+  }
+}
 
 @media (max-width: 1000px) {
   .login-panel { right: 5%; width: 43vw; min-width: 390px; }
