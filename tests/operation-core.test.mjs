@@ -4,6 +4,7 @@ import test from 'node:test';
 import { createOperationFiles } from '../src/domains/operation/domain/files.js';
 import { recordActivity } from '../src/domains/operation/domain/commands.js';
 import { createOperationPersistence } from '../src/domains/operation/domain/persistence.js';
+import { operationRpcHeaders } from '../src/domains/operation/infrastructure/agency-store.js';
 import {
   canMoveDeliverableToStep,
   effectiveDeadline,
@@ -14,6 +15,21 @@ import {
   requiresClientReapprovalAfterCurrentStep
 } from '../src/domains/operation/domain/selectors.js';
 import { createEmptyOperationState, normalizeOperationState } from '../src/domains/operation/domain/state.js';
+
+test('mantém a agência de suporte nas chamadas RPC da operação', () => {
+  const auth = {
+    supabase: { supabaseKey: 'chave-publica' },
+    supportMode: true,
+    supportAgency: { id: 'b62a1f3a-65ee-4d5a-9d07-4b3ee4b7a23d' }
+  };
+
+  assert.deepEqual(operationRpcHeaders(auth, 'token-de-acesso'), {
+    apikey: 'chave-publica',
+    Authorization: 'Bearer token-de-acesso',
+    'Content-Type': 'application/json',
+    'X-Doti-Agency-Id': 'b62a1f3a-65ee-4d5a-9d07-4b3ee4b7a23d'
+  });
+});
 
 test('normaliza snapshots legados sem perder a referência do cliente ou as etapas', () => {
   let id = 0;
