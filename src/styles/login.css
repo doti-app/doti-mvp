@@ -199,6 +199,21 @@ button, input { font: inherit; }
   font-size: clamp(10px, .86vw, 13px);
 }
 .login-field input::placeholder { color: rgba(17,17,17,.57); }
+.login-field input:-webkit-autofill,
+.login-field input:-webkit-autofill:hover,
+.login-field input:-webkit-autofill:focus,
+.login-field input:-webkit-autofill:active {
+  -webkit-text-fill-color: #111;
+  caret-color: #111;
+  -webkit-box-shadow: 0 0 0 1000px var(--login-yellow) inset;
+  box-shadow: 0 0 0 1000px var(--login-yellow) inset;
+  transition: background-color 9999s ease-out 0s;
+}
+.login-field input:autofill {
+  color: #111;
+  background: var(--login-yellow);
+  box-shadow: 0 0 0 1000px var(--login-yellow) inset;
+}
 .login-field input::-ms-reveal,
 .login-field input::-ms-clear {
   display: none;
