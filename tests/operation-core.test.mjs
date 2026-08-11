@@ -4,7 +4,15 @@ import test from 'node:test';
 import { createOperationFiles } from '../src/domains/operation/domain/files.js';
 import { recordActivity } from '../src/domains/operation/domain/commands.js';
 import { createOperationPersistence } from '../src/domains/operation/domain/persistence.js';
-import { canMoveDeliverableToStep, effectiveDeadline, isClientActionStep, macroStatus, overdueDeadline } from '../src/domains/operation/domain/selectors.js';
+import {
+  canMoveDeliverableToStep,
+  effectiveDeadline,
+  isClientActionStep,
+  macroStatus,
+  nextStepIndexAfterCompletion,
+  overdueDeadline,
+  requiresClientReapprovalAfterCurrentStep
+} from '../src/domains/operation/domain/selectors.js';
 import { createEmptyOperationState, normalizeOperationState } from '../src/domains/operation/domain/state.js';
 
 test('normaliza snapshots legados sem perder a referência do cliente ou as etapas', () => {
@@ -98,9 +106,46 @@ test('permite reposicionar a demanda sem pular a aprovação do cliente', () => 
   assert.equal(canMoveDeliverableToStep(deliverable, 2, groups), false);
   assert.equal(canMoveDeliverableToStep(deliverable, 3, groups), false);
 
+  deliverable.stepIndex = 2;
+  assert.equal(canMoveDeliverableToStep(deliverable, 1, groups), true);
+  assert.equal(canMoveDeliverableToStep(deliverable, 3, groups), false);
+
   deliverable.stepIndex = 3;
   assert.equal(canMoveDeliverableToStep(deliverable, 1, groups), true);
   assert.equal(canMoveDeliverableToStep(deliverable, 2, groups), false);
+});
+
+test('ajustes solicitados retornam para uma nova aprovação do cliente', () => {
+  const groups = [
+    { id: 'design', isClientGroup: false },
+    { id: 'cliente', isClientGroup: true },
+    { id: 'atendimento', isClientGroup: false }
+  ];
+  const deliverable = {
+    stepIndex: 2,
+    steps: [
+      { id: 'criacao', name: 'Criação', groupId: 'design' },
+      { id: 'aprovacao', name: 'Aprovação do cliente', groupId: 'cliente' },
+      { id: 'ajustes', name: 'Ajustes', groupId: 'design' },
+      { id: 'entrega', name: 'Entrega final', groupId: 'atendimento' }
+    ],
+    approvalDecisions: [
+      {
+        stepId: 'aprovacao',
+        decision: 'rejected',
+        fromStepPosition: 1,
+        toStepPosition: 2,
+        decidedAt: '2026-08-10T14:44:00.000Z'
+      }
+    ]
+  };
+
+  assert.equal(requiresClientReapprovalAfterCurrentStep(deliverable, groups), true);
+  assert.equal(nextStepIndexAfterCompletion(deliverable, groups), 1);
+
+  deliverable.approvalDecisions[0].decision = 'approved';
+  assert.equal(requiresClientReapprovalAfterCurrentStep(deliverable, groups), false);
+  assert.equal(nextStepIndexAfterCompletion(deliverable, groups), 3);
 });
 
 test('serializa persistência e descarta alterações pendentes após um erro', async () => {

@@ -75,6 +75,7 @@ globalThis.document = {
 const { element } = await import('../src/shared/dom.js');
 const { createModalService } = await import('../src/shared/ui/modal-service.js');
 const { renderDashboardView } = await import('../src/domains/operation/ui/dashboard-view.js');
+const { mergeClientCatalog } = await import('../src/domains/team/team-domain.js');
 
 test('constrói elementos com texto literal, sem interpretar HTML fornecido', () => {
   const unsafe = '<img src=x onerror=alert(1)>';
@@ -127,4 +128,14 @@ test('dashboard renderiza dados dinâmicos por nós DOM seguros', () => {
   const row = elementsById.get('recentProjects').children[0];
   assert.equal(row.children[1].children[0].textContent, '<cliente>');
   assert.equal(row.children[1].children[1].textContent, '<projeto>');
+});
+
+test('catálogo de clientes combina a lista da equipe e a operação sem duplicar opções', () => {
+  assert.deepEqual(
+    mergeClientCatalog(
+      [{ id: 'client-1', name: 'Cliente existente' }],
+      [{ id: 'client-1', name: 'Nome desatualizado' }, { id: 'client-2', name: '3 Ato Podcast' }]
+    ),
+    [{ id: 'client-1', name: 'Cliente existente' }, { id: 'client-2', name: '3 Ato Podcast' }]
+  );
 });

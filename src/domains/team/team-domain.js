@@ -14,6 +14,20 @@ const roleDescriptions = {
   client: 'Aprova somente os próprios projetos'
 };
 
+export function mergeClientCatalog(...catalogs) {
+  const clientsById = new Map();
+  catalogs.forEach(catalog => {
+    if (!Array.isArray(catalog)) return;
+    catalog.forEach(client => {
+      const id = String(client?.id || '').trim();
+      const name = String(client?.name || '').trim();
+      if (!id || !name || clientsById.has(id)) return;
+      clientsById.set(id, { id, name });
+    });
+  });
+  return [...clientsById.values()];
+}
+
 /** @param {{ auth: any, events?: EventTarget, document?: Document }} dependencies */
 export function createTeamDomain({ auth, events = new EventTarget(), document: documentRef = globalThis.document }) {
 const document = documentRef;
@@ -25,6 +39,16 @@ const teamNavItem = document.getElementById('teamNavItem');
 const inviteButton = document.getElementById('inviteMemberButton');
 const membersContainer = document.getElementById('teamMembers');
 const teamSearch = document.getElementById('teamSearch');
+
+function normalizeTeamState(payload) {
+  return {
+    members: Array.isArray(payload?.members) ? payload.members : [],
+    invitations: Array.isArray(payload?.invitations) ? payload.invitations : [],
+    clients: mergeClientCatalog(payload?.clients),
+    currentUserId: String(payload?.currentUserId || authContext?.profile?.id || ''),
+    currentRole: String(payload?.currentRole || authContext?.profile?.role || '')
+  };
+}
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -175,6 +199,12 @@ function localTeamRequest(action, body = {}) {
     return { message: `Convite simulado para ${email}. Nenhum e-mail foi enviado.` };
   }
 
+  if (action === 'resend_invitation') {
+    const invitation = state.invitations.find(item => item.id === body?.invitationId && item.status === 'pending');
+    if (!invitation) throw new Error('Convite pendente local não encontrado.');
+    return { message: `Reenvio simulado para ${invitation.email}. Nenhum e-mail foi enviado.` };
+  }
+
   if (action === 'update_member') {
     const member = state.members.find(item => item.id === body?.memberId);
     if (!member) throw new Error('Membro local nao encontrado.');
@@ -288,9 +318,10 @@ function renderMembers() {
 
   membersContainer.innerHTML = members.map(member => {
     const isCurrent = member.id === teamState.currentUserId;
-    const invitePending = teamState.invitations.some(
+    const pendingInvitation = teamState.invitations.find(
       invitation => invitation.email.toLowerCase() === member.email.toLowerCase()
     );
+    const invitePending = Boolean(pendingInvitation);
     const protectedMember =
       isCurrent ||
       member.role === 'owner' ||
@@ -316,6 +347,7 @@ function renderMembers() {
           <i></i>${invitePending ? 'Convidado' : member.is_active ? 'Ativo' : 'Desativado'}
         </div>
         <div class="team-actions">
+          ${invitePending && !protectedMember && !authContext?.supportMode ? `<button class="team-resend-invitation" type="button" data-resend-invitation="${escapeHtml(pendingInvitation.id)}">Reenviar e-mail</button>` : ''}
           ${member.role === 'client' && !protectedMember ? `<button class="team-client-link" type="button" data-change-client>Alterar cliente</button>` : ''}
           <button class="team-access-toggle" type="button" data-toggle-access
             ${protectedMember ? 'disabled' : ''}
@@ -336,7 +368,7 @@ async function loadTeam() {
   if (!authContext || !['owner', 'admin'].includes(authContext.profile.role)) return;
   membersContainer.innerHTML = '<div class="team-loading">Carregando equipe…</div>';
   try {
-    teamState = await teamRequest();
+    teamState = normalizeTeamState(await teamRequest());
     renderMetrics();
     renderMembers();
   } catch (error) {
@@ -347,6 +379,13 @@ async function loadTeam() {
         <p>${escapeHtml(error.message)}</p>
       </div>`;
   }
+}
+
+async function refreshTeamClientCatalog() {
+  if (authContext?.localMode || typeof authContext?.supabase?.rpc !== 'function') return;
+  const { data, error } = await authContext.supabase.rpc('load_agency_state');
+  if (error) throw error;
+  teamState.clients = mergeClientCatalog(teamState.clients, data?.clients);
 }
 
 function closeModal(modal) {
@@ -401,7 +440,17 @@ function openRemoveMemberModal(member) {
   });
 }
 
-function openInviteModal() {
+async function openInviteModal() {
+  if (document.querySelector('.team-invite-modal')) return;
+  inviteButton.disabled = true;
+  try {
+    await refreshTeamClientCatalog();
+  } catch (error) {
+    console.warn('Não foi possível atualizar a lista de clientes para o convite.', error);
+  } finally {
+    inviteButton.disabled = false;
+  }
+  if (document.querySelector('.team-invite-modal')) return;
   const canInviteAdmin = teamState.currentRole === 'owner';
   const modal = document.createElement('div');
   modal.className = 'doti-modal team-invite-modal';
@@ -484,7 +533,12 @@ function openInviteModal() {
   form.elements.fullName.focus();
 }
 
-function openClientAssignmentModal(member) {
+async function openClientAssignmentModal(member) {
+  try {
+    await refreshTeamClientCatalog();
+  } catch (error) {
+    console.warn('Não foi possível atualizar a lista de clientes para o vínculo.', error);
+  }
   if (!teamState.clients.length) {
     showTeamNotice('Nenhum cliente cadastrado', 'Cadastre um cliente antes de criar este acesso.', true);
     return;
@@ -551,6 +605,22 @@ membersContainer.addEventListener('change', async event => {
 });
 
 membersContainer.addEventListener('click', async event => {
+  const resendButton = event.target.closest('[data-resend-invitation]');
+  if (resendButton) {
+    const invitationId = resendButton.dataset.resendInvitation;
+    resendButton.disabled = true;
+    resendButton.textContent = 'Reenviando…';
+    try {
+      const result = await teamRequest('resend_invitation', { invitationId });
+      showTeamNotice('E-mail reenviado', result.message);
+    } catch (error) {
+      showTeamNotice('Reenvio não realizado', error.message, true);
+    } finally {
+      resendButton.disabled = false;
+      resendButton.textContent = 'Reenviar e-mail';
+    }
+    return;
+  }
   const changeClientButton = event.target.closest('[data-change-client]');
   if (changeClientButton) {
     const row = changeClientButton.closest('[data-member-id]');
