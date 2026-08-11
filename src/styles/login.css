@@ -316,6 +316,9 @@ button, input { font: inherit; }
   right: calc(100% - 49px);
   transform: none;
 }
+.login-form[data-mode="recovery"] .login-submit:hover > span {
+  transform: translateX(40px);
+}
 
 .demo-access {
   align-self: flex-start;
