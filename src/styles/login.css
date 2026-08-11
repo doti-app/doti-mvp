@@ -421,7 +421,7 @@ button, input { font: inherit; }
 
 @media (min-width: 761px) {
   .login-panel[data-mode="signup"] {
-    top: 8%;
+    top: 19.5%;
     max-height: none;
     overflow: visible;
     padding-block: clamp(30px, 3.4vw, 46px);
