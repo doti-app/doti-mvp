@@ -170,20 +170,28 @@ function preloadImage(src) {
   });
 }
 
-async function openSignupMode() {
+async function switchModeWithLoading(nextMode, illustrationSrc) {
   secondaryAction.disabled = true;
   experience.classList.add('mode-switching');
   try {
     await Promise.all([
-      preloadImage('/assets/login-signup-illustration.png'),
+      preloadImage(illustrationSrc),
       delay(260)
     ]);
-    setMode('signup');
+    setMode(nextMode);
     await delay(70);
   } finally {
     experience.classList.remove('mode-switching');
     secondaryAction.disabled = false;
   }
+}
+
+function openSignupMode() {
+  return switchModeWithLoading('signup', '/assets/login-signup-illustration.png');
+}
+
+function openLoginMode() {
+  return switchModeWithLoading('login', '/assets/login-illustration.png');
 }
 
 function validateEmail() {
@@ -350,6 +358,10 @@ secondaryAction.addEventListener('click', async () => {
   }
   if (mode === 'login') {
     await openSignupMode();
+    return;
+  }
+  if (mode === 'signup') {
+    await openLoginMode();
     return;
   }
   setMode('login');
