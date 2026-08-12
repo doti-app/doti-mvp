@@ -1,4 +1,5 @@
 [hidden]{display:none!important}
+html,body{max-width:100%;overflow-x:hidden}
 button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #ffd40066;outline-offset:2px}
 .nav-item .nav-icon{width:20px;height:20px;flex:0 0 20px;display:grid;place-items:center}
 .nav-item .nav-icon svg{width:19px;height:19px;display:block;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
@@ -76,7 +77,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .team-directory-panel .panel-head{gap:14px}
 .team-search{width:210px}
 .team-table{display:flex;flex-direction:column}
-.team-member{display:grid;grid-template-columns:42px minmax(160px,1.2fr) minmax(150px,.9fr) 140px 88px 86px;align-items:center;gap:12px;padding:15px 4px;border-top:1px solid #ecece7}
+.team-member{display:grid;grid-template-columns:42px minmax(150px,1.2fr) minmax(130px,.9fr) 125px 120px 82px 82px;align-items:center;gap:10px;padding:15px 4px;border-top:1px solid #ecece7}
 .team-member:first-child{border-top:0}
 .team-member.disabled{opacity:.57;background:#fafaf8}
 .team-avatar{width:40px;height:40px;border-radius:11px;background:#171713;color:#ffd400;display:grid;place-items:center;font-size:11px;font-weight:800;overflow:hidden}
@@ -93,17 +94,23 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .team-role-select select{width:100%;border:1px solid #dfdfda;border-radius:8px;background:#fff;padding:8px;font-size:10px;outline:none}
 .team-role-select select:focus{border-color:#111;box-shadow:0 0 0 2px #ffd40055}
 .team-role-select select:disabled{cursor:not-allowed;background:#f2f2ef;color:#888}
+.team-group-select{display:flex;flex-direction:column;gap:3px;min-width:0}
+.team-group-select>span{font-size:8px;color:#999;font-weight:800;letter-spacing:.5px}
+.team-group-select button{width:100%;border:1px solid #dfdfda;border-radius:8px;background:#fff;padding:8px;text-align:left;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.team-group-select button:hover,.team-group-select button:focus{border-color:#111;box-shadow:0 0 0 2px #ffd40055;outline:none}
+.team-group-select button:disabled{cursor:not-allowed;background:#f2f2ef;color:#888;box-shadow:none;border-color:#dfdfda}
 .team-member-status{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700}
 .team-member-status i{width:6px;height:6px;border-radius:50%;background:#20a36a;box-shadow:0 0 0 3px #e3f4ec}
 .team-member-status.inactive i{background:#aaa;box-shadow:0 0 0 3px #eee}
-.team-actions{display:flex;flex-direction:column;align-items:flex-start;gap:1px}
-.team-access-toggle{border:0;background:transparent;padding:7px 0;font-size:10px;font-weight:700;color:#777;text-decoration:underline;cursor:pointer}
-.team-access-toggle:hover{color:#111}
+.team-actions{display:flex;flex-direction:column;align-items:stretch;gap:3px;min-width:0}
+.team-actions button{max-width:100%;white-space:nowrap}
+.team-access-toggle{border:0;border-radius:6px;background:transparent;padding:4px 6px;font-size:9px;font-weight:700;color:#777;text-align:left;cursor:pointer}
+.team-access-toggle:hover{color:#111;background:#f1f1ed}
 .team-access-toggle:disabled{opacity:.25;cursor:not-allowed;text-decoration:none}
-.team-remove-member{border:0;background:transparent;padding:3px 0;font-size:9px;font-weight:700;color:#b43a2b;text-decoration:underline;cursor:pointer}
-.team-remove-member:hover{color:#7f2118}
-.team-client-link{border:0;background:transparent;padding:3px 0;font-size:9px;font-weight:700;color:#6b5600;text-decoration:underline;cursor:pointer}.team-client-link:hover{color:#111}.team-client-picker{margin-top:12px!important}.team-client-picker[hidden]{display:none!important}.team-client-picker small{font-size:8px;color:#777;font-weight:400}.team-client-assignment-modal>form{width:min(480px,100%)}
-.team-resend-invitation{border:0;background:transparent;padding:3px 0;font-size:9px;font-weight:700;color:#29479e;text-decoration:underline;cursor:pointer}.team-resend-invitation:hover{color:#111}.team-resend-invitation:disabled{cursor:wait;opacity:.55;text-decoration:none}
+.team-remove-member{border:0;border-radius:6px;background:transparent;padding:4px 6px;font-size:9px;font-weight:700;color:#b43a2b;text-align:left;cursor:pointer}
+.team-remove-member:hover{color:#7f2118;background:#fff0ed}
+.team-client-link{border:0;border-radius:6px;background:transparent;padding:4px 6px;font-size:9px;font-weight:700;color:#6b5600;text-align:left;cursor:pointer}.team-client-link:hover{color:#111;background:#fff9d8}.team-client-picker{margin-top:12px!important}.team-client-picker[hidden]{display:none!important}.team-client-picker small{font-size:8px;color:#777;font-weight:400}.team-client-assignment-modal>form{width:min(480px,100%)}
+.team-resend-invitation{border:0;border-radius:6px;background:#eef3ff;padding:4px 6px;font-size:9px;font-weight:700;color:#29479e;text-align:left;cursor:pointer}.team-resend-invitation:hover{color:#13265d;background:#dfe8ff}.team-resend-invitation:disabled{cursor:wait;opacity:.55}
 .team-access-guide{background:#ffd400;border-radius:15px;padding:20px;position:sticky;top:78px;overflow:hidden}
 .team-access-guide>.eyebrow{position:relative;z-index:1;color:#111}
 .team-access-guide:after{content:"";position:absolute;width:220px;height:220px;border:1px solid #111;border-radius:50%;right:-125px;top:-152px;box-shadow:0 0 0 24px #111}
@@ -132,6 +139,21 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .team-role-picker label>span>small{font-size:8px;color:#888;font-weight:400}
 .team-role-picker input:checked+span{border-color:#111;background:#fff9d8;box-shadow:0 0 0 2px #ffd40066}
 .team-role-picker input:checked+span>i{background:#171713;color:#ffd400}
+.team-group-picker{border:0;padding:0;margin:16px 0 4px}
+.team-group-picker legend{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:11px;font-weight:700;margin-bottom:8px}
+.team-group-picker legend small{font-size:8px;color:#888;font-weight:500}
+.team-group-picker>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.team-group-picker label{margin:0!important;cursor:pointer}
+.team-group-picker input{position:absolute;opacity:0}
+.team-group-picker label>span{display:flex;align-items:center;gap:8px;min-height:38px;border:1px solid #e2e2dd;border-radius:9px;padding:8px 10px;font-size:9px;font-weight:650;transition:.15s}
+.team-group-picker label>span>i{width:17px;height:17px;border:1px solid #cfcfc8;border-radius:5px;display:grid;place-items:center;color:transparent;font-size:10px;font-style:normal;flex:0 0 auto}
+.team-group-picker input:checked+span{border-color:#b99c00;background:#fff9d8}
+.team-group-picker input:checked+span>i{border-color:#171713;background:#171713;color:#ffd400}
+.team-group-picker input:focus-visible+span{outline:2px solid #ffd400;outline-offset:2px}
+.team-group-picker>p{margin:8px 0 0;font-size:8px;color:#777;line-height:1.4}
+.team-group-empty{grid-column:1/-1;margin:0;padding:12px;border:1px dashed #d8d8d1;border-radius:9px;color:#888;font-size:9px;text-align:center}
+.team-group-assignment-modal>form{width:min(520px,100%)}
+.team-group-assignment-modal header>div{display:flex;flex-direction:column}
 .team-modal-status{min-height:16px;color:#b43a2b;font-size:9px;font-weight:700;padding-top:5px}
 .team-remove-modal>form{width:min(460px,100%)}
 .team-remove-modal header>div{display:flex;flex-direction:column}
@@ -372,24 +394,30 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .profile-settings-footer>span{font-size:9px;color:#777}
 .profile-settings-footer .primary-btn:disabled{cursor:not-allowed}
 
+@media(max-width:1450px){
+  .team-layout{grid-template-columns:1fr}
+  .team-access-guide{position:static;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px}
+  .team-access-guide>.eyebrow,.team-access-guide>h2{grid-column:1/-1}
+  .team-member{grid-template-columns:42px minmax(145px,1.15fr) minmax(125px,.85fr) 125px 120px 82px 88px}
+}
 @media(max-width:1100px){
   .team-overview{grid-template-columns:repeat(2,1fr)}
-  .team-layout{grid-template-columns:1fr}
-  .team-access-guide{position:static;display:grid;grid-template-columns:repeat(2,1fr);gap:0 18px}
-  .team-access-guide>.eyebrow,.team-access-guide>h2{grid-column:1/-1}
-  .team-member{grid-template-columns:38px minmax(145px,1fr) 120px 115px 82px}
+  .team-member{grid-template-columns:38px minmax(145px,1fr) 115px 115px 82px 78px}
   .team-role-copy{display:none}
   .profile-avatar-picker{grid-template-columns:repeat(8,minmax(52px,1fr))}
 }
 @media(max-width:760px){
   .team-overview{grid-template-columns:1fr 1fr}
   .team-overview article{min-height:84px;padding:12px}
+  .team-page-title{align-items:flex-start;flex-direction:column}
   .team-directory-panel .panel-head{align-items:stretch;flex-direction:column}
   .team-search{width:100%}
   .team-member{grid-template-columns:36px 1fr auto;gap:9px}
   .team-role-select{grid-column:2}
+  .team-group-select{grid-column:2}
   .team-member-status{grid-column:3;grid-row:1}
-  .team-actions{grid-column:3;grid-row:2;align-items:flex-end}
+  .team-actions{grid-column:3;grid-row:2/4;align-items:stretch}
+  .team-actions button{text-align:right}
   .team-access-guide{grid-template-columns:1fr}
   .team-access-guide>.eyebrow,.team-access-guide>h2{grid-column:1}
   .profile-fields{grid-template-columns:1fr}

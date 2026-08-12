@@ -14,6 +14,11 @@ const roleDescriptions = {
   client: 'Aprova somente os próprios projetos'
 };
 
+export function normalizeGroupIds(values) {
+  if (!Array.isArray(values)) return [];
+  return [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))];
+}
+
 export function mergeClientCatalog(...catalogs) {
   const clientsById = new Map();
   catalogs.forEach(catalog => {
@@ -32,7 +37,7 @@ export function mergeClientCatalog(...catalogs) {
 export function createTeamDomain({ auth, events = new EventTarget(), document: documentRef = globalThis.document }) {
 const document = documentRef;
 let authContext;
-let teamState = { members: [], invitations: [], clients: [], currentUserId: '', currentRole: '' };
+let teamState = { members: [], invitations: [], clients: [], groups: [], currentUserId: '', currentRole: '' };
 const LOCAL_TEAM_KEY = 'doti-local-team-v1';
 
 const teamNavItem = document.getElementById('teamNavItem');
@@ -45,6 +50,7 @@ function normalizeTeamState(payload) {
     members: Array.isArray(payload?.members) ? payload.members : [],
     invitations: Array.isArray(payload?.invitations) ? payload.invitations : [],
     clients: mergeClientCatalog(payload?.clients),
+    groups: Array.isArray(payload?.groups) ? payload.groups : [],
     currentUserId: String(payload?.currentUserId || authContext?.profile?.id || ''),
     currentRole: String(payload?.currentRole || authContext?.profile?.role || '')
   };
@@ -164,6 +170,12 @@ function localTeamRequest(action, body = {}) {
     try { return JSON.parse(localStorage.getItem('doti-agency-live-v4') || 'null'); } catch (_) { return null; }
   })();
   state.clients = (operation?.clients || []).map(client => ({ id: client.id, name: client.name }));
+  state.groups = (operation?.groups || []).map(group => ({ id: group.id, name: group.name }));
+  state.members.forEach(member => {
+    if (!Array.isArray(member.group_ids) && !['owner', 'client'].includes(member.role)) {
+      member.group_ids = state.groups.map(group => group.id);
+    }
+  });
   if (action === 'list') return JSON.parse(JSON.stringify(state));
 
   if (action === 'invite') {
@@ -176,6 +188,11 @@ function localTeamRequest(action, body = {}) {
     const clientId = role === 'client' ? String(body?.clientId || '') : null;
     const client = state.clients.find(item => item.id === clientId);
     if (role === 'client' && !client) throw new Error('Escolha o cliente deste acesso.');
+    const groupIds = role === 'client' ? [] : normalizeGroupIds(body?.groupIds);
+    if (role !== 'client' && !groupIds.length) throw new Error('Escolha pelo menos um grupo responsável.');
+    if (groupIds.some(groupId => !state.groups.some(group => group.id === groupId))) {
+      throw new Error('Um dos grupos escolhidos não está disponível.');
+    }
     state.members.push({
       id,
       email,
@@ -183,6 +200,7 @@ function localTeamRequest(action, body = {}) {
       role,
       client_id: clientId,
       client_name: client?.name || '',
+      group_ids: groupIds,
       is_active: true,
       created_at: new Date().toISOString()
     });
@@ -192,6 +210,7 @@ function localTeamRequest(action, body = {}) {
       full_name: String(body?.fullName || 'Pessoa de teste').trim(),
       role,
       client_id: clientId,
+      group_ids: groupIds,
       status: 'pending',
       created_at: new Date().toISOString()
     });
@@ -219,6 +238,15 @@ function localTeamRequest(action, body = {}) {
       member.role = nextRole;
       member.client_id = clientId;
       member.client_name = client?.name || '';
+    }
+    if (Array.isArray(body.groupIds) || body.role === 'client') {
+      const effectiveRole = body.role == null ? member.role : String(body.role);
+      const groupIds = effectiveRole === 'client' ? [] : normalizeGroupIds(body.groupIds);
+      if (effectiveRole !== 'client' && !groupIds.length) throw new Error('Escolha pelo menos um grupo responsável.');
+      if (groupIds.some(groupId => !state.groups.some(group => group.id === groupId))) {
+        throw new Error('Um dos grupos escolhidos não está disponível.');
+      }
+      member.group_ids = groupIds;
     }
     if (body.isActive != null) member.is_active = Boolean(body.isActive);
     saveLocalTeam(state);
@@ -298,6 +326,21 @@ function roleOptions(member) {
     .join('');
 }
 
+function memberGroups(member) {
+  const assigned = new Set(normalizeGroupIds(member.group_ids));
+  return teamState.groups.filter(group => assigned.has(String(group.id)));
+}
+
+function groupAssignmentLabel(member) {
+  if (authContext?.supportMode) return 'Acesso da agência';
+  if (member.role === 'owner') return 'Todos os grupos';
+  if (member.role === 'client') return 'Não se aplica';
+  const groups = memberGroups(member);
+  if (!groups.length) return 'Definir grupos';
+  if (groups.length === 1) return groups[0].name;
+  return `${groups.length} grupos`;
+}
+
 function renderMembers() {
   const filter = teamSearch.value.trim().toLowerCase();
   const members = teamState.members.filter(member =>
@@ -343,11 +386,19 @@ function renderMembers() {
           <span>Nível</span>
           <select data-member-role ${protectedMember || !member.is_active ? 'disabled' : ''}>${roleOptions(member)}</select>
         </label>
+        <div class="team-group-select">
+          <span>Grupos</span>
+          <button type="button" data-change-groups
+            ${protectedMember || !member.is_active || member.role === 'client' || authContext?.supportMode ? 'disabled' : ''}
+            title="${escapeHtml(memberGroups(member).map(group => group.name).join(', ') || groupAssignmentLabel(member))}">
+            ${escapeHtml(groupAssignmentLabel(member))}
+          </button>
+        </div>
         <div class="team-member-status ${member.is_active && !invitePending ? 'active' : 'inactive'}">
           <i></i>${invitePending ? 'Convidado' : member.is_active ? 'Ativo' : 'Desativado'}
         </div>
         <div class="team-actions">
-          ${invitePending && !protectedMember && !authContext?.supportMode ? `<button class="team-resend-invitation" type="button" data-resend-invitation="${escapeHtml(pendingInvitation.id)}">Reenviar e-mail</button>` : ''}
+          ${invitePending && !protectedMember && !authContext?.supportMode ? `<button class="team-resend-invitation" type="button" data-resend-invitation="${escapeHtml(pendingInvitation.id)}" aria-label="Reenviar e-mail para ${escapeHtml(member.full_name)}">Reenviar</button>` : ''}
           ${member.role === 'client' && !protectedMember ? `<button class="team-client-link" type="button" data-change-client>Alterar cliente</button>` : ''}
           <button class="team-access-toggle" type="button" data-toggle-access
             ${protectedMember ? 'disabled' : ''}
@@ -390,6 +441,18 @@ async function refreshTeamClientCatalog() {
 
 function closeModal(modal) {
   modal?.remove();
+}
+
+function groupChecklist(selectedIds = []) {
+  const selected = new Set(normalizeGroupIds(selectedIds));
+  if (!teamState.groups.length) {
+    return '<p class="team-group-empty">Nenhum grupo cadastrado na operação.</p>';
+  }
+  return teamState.groups.map(group => `
+    <label>
+      <input type="checkbox" name="groupIds" value="${escapeHtml(group.id)}" ${selected.has(String(group.id)) ? 'checked' : ''}>
+      <span><i aria-hidden="true">✓</i>${escapeHtml(group.name)}</span>
+    </label>`).join('');
 }
 
 function openRemoveMemberModal(member) {
@@ -476,6 +539,11 @@ async function openInviteModal() {
           <label><input type="radio" name="role" value="viewer"><span><i>04</i><b>Visualizador</b><small>Acompanha sem alterar</small></span></label>
           <label><input type="radio" name="role" value="client"><span><i>05</i><b>Cliente da agência</b><small>Aprova somente os próprios projetos</small></span></label>
         </fieldset>
+        <fieldset class="team-group-picker">
+          <legend>Grupos responsáveis <small>Selecione um ou mais</small></legend>
+          <div>${groupChecklist()}</div>
+          <p>A pessoa verá no filtro apenas o trabalho dos grupos selecionados.</p>
+        </fieldset>
         <label class="team-client-picker" hidden>Cliente vinculado
           <select name="clientId"><option value="">Escolha o cliente</option>${teamState.clients.map(client => `<option value="${escapeHtml(client.id)}">${escapeHtml(client.name)}</option>`).join('')}</select>
           <small>Esta pessoa verá apenas aprovações dos projetos deste cliente.</small>
@@ -502,6 +570,13 @@ async function openInviteModal() {
     const submit = form.querySelector('[type="submit"]');
     const status = form.querySelector('.team-modal-status');
     const data = new FormData(form);
+    const selectedRole = String(data.get('role') || 'member');
+    const selectedGroupIds = data.getAll('groupIds');
+    if (!authContext?.supportMode && selectedRole !== 'client' && !selectedGroupIds.length) {
+      status.textContent = 'Selecione pelo menos um grupo responsável.';
+      form.querySelector('.team-group-picker')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
+    }
     submit.disabled = true;
     submit.textContent = 'Enviando…';
     status.textContent = '';
@@ -509,8 +584,9 @@ async function openInviteModal() {
     const result = await teamRequest('invite', {
         fullName: data.get('fullName'),
         email: data.get('email'),
-        role: data.get('role'),
-        clientId: data.get('clientId')
+        role: selectedRole,
+        clientId: data.get('clientId'),
+        groupIds: selectedGroupIds
       });
       closeModal(modal);
       showTeamNotice('Convite enviado', result.message);
@@ -523,10 +599,13 @@ async function openInviteModal() {
     }
   });
   const clientPicker = form.querySelector('.team-client-picker');
+  const groupPicker = form.querySelector('.team-group-picker');
   const syncClientPicker = () => {
     const clientRole = form.querySelector('input[name="role"]:checked')?.value === 'client';
     clientPicker.hidden = !clientRole;
     clientPicker.querySelector('select').required = clientRole;
+    groupPicker.hidden = clientRole || Boolean(authContext?.supportMode);
+    groupPicker.querySelectorAll('input').forEach(input => { input.required = false; });
   };
   form.querySelectorAll('input[name="role"]').forEach(input => input.addEventListener('change', syncClientPicker));
   syncClientPicker();
@@ -575,6 +654,54 @@ async function openClientAssignmentModal(member) {
   });
 }
 
+function openGroupAssignmentModal(member, nextRole = null) {
+  if (!teamState.groups.length) {
+    showTeamNotice('Nenhum grupo cadastrado', 'Crie um grupo na área de Fluxos antes de atribuir responsáveis.', true);
+    return;
+  }
+  const modal = document.createElement('div');
+  modal.className = 'doti-modal team-group-assignment-modal';
+  modal.innerHTML = `<form>
+    <header><div><p class="eyebrow">RESPONSABILIDADE</p><h2>Grupos de ${escapeHtml(member.full_name)}</h2></div><button type="button" data-close-modal aria-label="Fechar">&times;</button></header>
+    <div class="modal-body">
+      <p class="team-invite-intro">Selecione os grupos que aparecerão no filtro desta pessoa.</p>
+      <fieldset class="team-group-picker"><legend>Grupos responsáveis <small>Selecione um ou mais</small></legend><div>${groupChecklist(member.group_ids)}</div></fieldset>
+      <div class="team-modal-status" role="alert"></div>
+    </div>
+    <footer><button type="button" class="cancel" data-close-modal>Cancelar</button><button type="submit" class="primary-btn">Salvar grupos</button></footer>
+  </form>`;
+  document.body.appendChild(modal);
+  modal.querySelectorAll('[data-close-modal]').forEach(button => button.addEventListener('click', () => closeModal(modal)));
+  modal.addEventListener('click', event => { if (event.target === modal) closeModal(modal); });
+  modal.querySelector('form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const submit = form.querySelector('[type="submit"]');
+    const status = form.querySelector('.team-modal-status');
+    const groupIds = new FormData(form).getAll('groupIds');
+    if (!groupIds.length) {
+      status.textContent = 'Selecione pelo menos um grupo responsável.';
+      return;
+    }
+    submit.disabled = true;
+    submit.textContent = 'Salvando…';
+    try {
+      const result = await teamRequest('update_member', {
+        memberId: member.id,
+        ...(nextRole ? { role: nextRole } : {}),
+        groupIds
+      });
+      closeModal(modal);
+      showTeamNotice('Grupos atualizados', result.message);
+      await loadTeam();
+    } catch (error) {
+      status.textContent = error.message;
+      submit.disabled = false;
+      submit.textContent = 'Salvar grupos';
+    }
+  });
+}
+
 membersContainer.addEventListener('change', async event => {
   const select = event.target.closest('[data-member-role]');
   if (!select) return;
@@ -589,6 +716,11 @@ membersContainer.addEventListener('change', async event => {
   if (select.value === 'client') {
     select.disabled = false;
     openClientAssignmentModal(member);
+    return;
+  }
+  if (member.role === 'client') {
+    select.disabled = false;
+    openGroupAssignmentModal(member, select.value);
     return;
   }
   try {
@@ -617,7 +749,7 @@ membersContainer.addEventListener('click', async event => {
       showTeamNotice('Reenvio não realizado', error.message, true);
     } finally {
       resendButton.disabled = false;
-      resendButton.textContent = 'Reenviar e-mail';
+      resendButton.textContent = 'Reenviar';
     }
     return;
   }
@@ -626,6 +758,13 @@ membersContainer.addEventListener('click', async event => {
     const row = changeClientButton.closest('[data-member-id]');
     const member = teamState.members.find(item => item.id === row.dataset.memberId);
     if (member) openClientAssignmentModal(member);
+    return;
+  }
+  const changeGroupsButton = event.target.closest('[data-change-groups]');
+  if (changeGroupsButton) {
+    const row = changeGroupsButton.closest('[data-member-id]');
+    const member = teamState.members.find(item => item.id === row.dataset.memberId);
+    if (member) openGroupAssignmentModal(member);
     return;
   }
   const removeButton = event.target.closest('[data-remove-member]');
