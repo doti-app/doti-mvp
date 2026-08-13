@@ -111,17 +111,25 @@ export async function configureAgencyClientGroup(groupId) {
   return callRpc('configure_client_group', { p_group_id: groupId });
 }
 
+export function operationRpcHeaders(auth, token) {
+  const headers = {
+    apikey: auth.supabase.supabaseKey,
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  };
+  if (auth.supportMode && auth.supportAgency?.id) {
+    headers['X-Doti-Agency-Id'] = auth.supportAgency.id;
+  }
+  return headers;
+}
+
 async function callRpc(name, body = {}) {
   const auth = await waitForOperationContext();
   const token = auth.session?.access_token;
   if (!token) throw new Error('Sua sessão expirou. Entre novamente.');
   const response = await fetch(`${auth.supabase.supabaseUrl}/rest/v1/rpc/${name}`, {
     method: 'POST',
-    headers: {
-      apikey: auth.supabase.supabaseKey,
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
+    headers: operationRpcHeaders(auth, token),
     body: JSON.stringify(body)
   });
   const result = await response.json().catch(() => null);
