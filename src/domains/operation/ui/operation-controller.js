@@ -84,6 +84,7 @@ let operationRefreshInFlight = false;
 let demandView = 'board';
 let flowView = 'models';
 let selectedClientWorkspaceId = null;
+let responsibleGroupIds = null;
 let calendarCursor = new Date();
 calendarCursor.setDate(1);
 let selectedCalendarDate = localDateKey(new Date());
@@ -585,18 +586,25 @@ function openClientModal(clientId = null) {
 function renderDemands() {
   const groupFilterElement = document.getElementById('groupFilter');
   const clientFilterElement = document.getElementById('clientFilter');
-  const selectedGroup = state.groups.some(group => group.id === groupFilterElement.value) ? groupFilterElement.value : 'all';
+  const responsibleSet = new Set(Array.isArray(responsibleGroupIds)
+    ? responsibleGroupIds.map(String)
+    : state.groups.map(group => String(group.id)));
+  const availableGroups = state.groups.filter(group => responsibleSet.has(String(group.id)));
+  const isGroupRestricted = availableGroups.length < state.groups.length;
+  const selectedGroup = availableGroups.some(group => group.id === groupFilterElement.value) ? groupFilterElement.value : 'all';
   const selectedClient = state.clients.some(client => client.id === clientFilterElement.value) ? clientFilterElement.value : 'all';
-  groupFilterElement.innerHTML = `<option value="all">Todos os grupos</option>${state.groups.map(group => `<option value="${group.id}">${escapeHtml(group.name)}</option>`).join('')}`;
+  groupFilterElement.innerHTML = `<option value="all">${isGroupRestricted ? 'Todos os meus grupos' : 'Todos os grupos'}</option>${availableGroups.map(group => `<option value="${group.id}">${escapeHtml(group.name)}</option>`).join('')}`;
   groupFilterElement.value = selectedGroup;
   clientFilterElement.innerHTML = `<option value="all">Todos os clientes</option>${[...state.clients].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(client => `<option value="${client.id}">${escapeHtml(client.name)}</option>`).join('')}`;
   clientFilterElement.value = selectedClient;
   const counts = { planning: 0, production: 0, approval: 0, done: 0 };
-  state.deliverables.forEach(item => counts[macroStatus(item)]++);
+  const scopedDeliverables = state.deliverables.filter(item => responsibleSet.has(String(currentStep(item).groupId)));
+  scopedDeliverables.forEach(item => counts[macroStatus(item)]++);
+  const scopedProjectIds = new Set(scopedDeliverables.map(item => item.projectId));
   /** @type {Array<[number, string, string, SVGSVGElement | string]>} */
   const summaryData = [
-    [state.projects.length, 'projetos', 'yellow-bg', createMetricIcon('projects', document)],
-    [state.deliverables.length, 'entregáveis', 'blue-bg', createMetricIcon('deliverables', document)],
+    [scopedProjectIds.size, 'projetos', 'yellow-bg', createMetricIcon('projects', document)],
+    [scopedDeliverables.length, 'entregáveis', 'blue-bg', createMetricIcon('deliverables', document)],
     [counts.approval, 'em aprovação', 'violet-bg', createMetricIcon('approval', document)],
     [counts.done, 'concluídos', 'mint-bg', '✓']
   ];
@@ -620,7 +628,7 @@ function renderDemands() {
   const filter = document.getElementById('statusFilter').value;
   const groupFilter = groupFilterElement.value;
   const clientFilter = clientFilterElement.value;
-  const visible = state.deliverables.filter(item => {
+  const visible = scopedDeliverables.filter(item => {
     const project = projectById(item.projectId);
     const haystack = normalize(`${item.name} ${project?.name || ''} ${project?.client || ''}`);
     const belongsToGroup = groupFilter === 'all' || currentStep(item).groupId === groupFilter;
@@ -639,7 +647,7 @@ function renderDemands() {
     : `<div class="full-empty">${emptyBlock('Sua operação está vazia', 'Crie um projeto, selecione os fluxos contratados e o Doti montará os entregáveis e etapas automaticamente.', '□', '<button class="primary-btn" data-create-project>+ Criar primeiro projeto</button>')}</div>`;
 
   const visibleProjectIds = new Set(visible.map(item => item.projectId));
-  const hasActiveFilters = search || filter !== 'all' || groupFilter !== 'all' || clientFilter !== 'all';
+  const hasActiveFilters = isGroupRestricted || search || filter !== 'all' || groupFilter !== 'all' || clientFilter !== 'all';
   const projectList = (hasActiveFilters ? state.projects.filter(project => visibleProjectIds.has(project.id)) : [...state.projects]).sort(compareProjectsByDate);
   document.getElementById('projectsView').innerHTML = projectList.length
     ? projectList.map(renderProjectRow).join('')
@@ -2095,6 +2103,9 @@ async function handlePersistenceError(error) {
 function applyLoadedState(loaded) {
   operationRevision = Number(loaded.revision || 0);
   if (!operationPersistence.isRunning && !operationPersistence.hasPending) queuedRevision = operationRevision;
+  responsibleGroupIds = Array.isArray(loaded.responsibleGroupIds)
+    ? loaded.responsibleGroupIds.map(String)
+    : null;
   state = normalizeWorkflowStepIds({
     version: 4,
     groups: loaded.groups || [],

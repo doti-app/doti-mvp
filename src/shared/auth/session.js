@@ -4,17 +4,29 @@ let authContext = null;
 let stopSubscription = () => {};
 
 function startLocalMode() {
-  const localRole = new URLSearchParams(location.search).get('localRole') === 'client'
-    ? 'client'
+  const parameters = new URLSearchParams(location.search);
+  const requestedRole = String(parameters.get('localRole') || 'owner');
+  const localRole = ['owner', 'admin', 'member', 'viewer', 'client'].includes(requestedRole)
+    ? requestedRole
     : 'owner';
+  const requestedUser = String(parameters.get('localUser') || '').trim().toLowerCase();
+  let localIdentity = null;
+  try {
+    const localTeam = JSON.parse(localStorage.getItem('doti-local-team-v1') || 'null');
+    localIdentity = (localTeam?.members || []).find(member =>
+      String(member.id || '').toLowerCase() === requestedUser
+      || String(member.email || '').toLowerCase() === requestedUser
+    ) || null;
+  } catch (_) {}
   const profile = {
-    id: 'local-owner',
+    id: String(localIdentity?.id || (localRole === 'owner' ? 'local-owner' : `local-${localRole}`)),
     agency_id: 'local-agency',
-    client_id: localRole === 'client' ? 'local-client' : null,
-    email: 'local@doti.dev',
-    full_name: localRole === 'client' ? 'Cliente de teste' : 'Ambiente local',
+    client_id: localRole === 'client' ? String(localIdentity?.client_id || 'local-client') : null,
+    email: String(localIdentity?.email || (localRole === 'owner' ? 'local@doti.dev' : `${localRole}@doti.dev`)),
+    full_name: String(localIdentity?.full_name || (localRole === 'client' ? 'Cliente de teste' : localRole === 'owner' ? 'Ambiente local' : `Pessoa ${localRole}`)),
     agency_name: 'Doti Sandbox',
     role: localRole,
+    responsible_group_ids: Array.isArray(localIdentity?.group_ids) ? localIdentity.group_ids : [],
     is_active: true,
     avatar_url: ''
   };
@@ -31,10 +43,16 @@ function startLocalMode() {
   const profileElement = document.querySelector('.profile');
   if (profileElement) {
     profileElement.querySelector('strong').textContent = profile.full_name;
-    profileElement.querySelector('small').textContent = localRole === 'client'
-      ? 'Doti Sandbox · cliente da agência'
-      : 'Doti Sandbox · proprietário';
-    profileElement.querySelector('.avatar').textContent = localRole === 'client' ? 'CT' : 'DL';
+    const localRoleLabels = {
+      owner: 'proprietário',
+      admin: 'administrador',
+      member: 'membro',
+      viewer: 'visualizador',
+      client: 'cliente da agência'
+    };
+    profileElement.querySelector('small').textContent = `Doti Sandbox · ${localRoleLabels[localRole]}`;
+    profileElement.querySelector('.avatar').textContent = String(profile.full_name || '?')
+      .split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase();
     profileElement.title = 'Modo local seguro';
   }
 

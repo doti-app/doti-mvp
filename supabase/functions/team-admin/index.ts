@@ -169,7 +169,7 @@ async function updateProfile(request: Request, body: Record<string, unknown>) {
 
 async function listTeam(profile: Profile) {
   const agencyId = encodeURIComponent(profile.agency_id);
-  const [members, invitations, clients] = await Promise.all([
+  const [members, invitations, clients, groups, memberGroups, invitationGroups] = await Promise.all([
     adminRequest(
       `/rest/v1/profiles?agency_id=eq.${agencyId}&select=id,email,full_name,avatar_url,role,client_id,is_active,created_at&order=created_at.asc`
     ),
@@ -178,22 +178,79 @@ async function listTeam(profile: Profile) {
     ),
     adminRequest(
       `/rest/v1/clients?agency_id=eq.${agencyId}&select=id,name&order=name.asc`
+    ),
+    adminRequest(
+      `/rest/v1/agency_groups?agency_id=eq.${agencyId}&select=id,name&order=position.asc`
+    ),
+    adminRequest(
+      `/rest/v1/profile_group_responsibilities?agency_id=eq.${agencyId}&select=profile_id,group_id`
+    ),
+    adminRequest(
+      `/rest/v1/invitation_group_responsibilities?agency_id=eq.${agencyId}&select=invitation_id,group_id`
     )
   ]);
   const clientsById = new Map(clients.map((client: { id: string; name: string }) => [client.id, client.name]));
+  const groupIdsByMember = new Map<string, string[]>();
+  memberGroups.forEach((assignment: { profile_id: string; group_id: string }) => {
+    const assigned = groupIdsByMember.get(assignment.profile_id) || [];
+    assigned.push(assignment.group_id);
+    groupIdsByMember.set(assignment.profile_id, assigned);
+  });
+  const groupIdsByInvitation = new Map<string, string[]>();
+  invitationGroups.forEach((assignment: { invitation_id: string; group_id: string }) => {
+    const assigned = groupIdsByInvitation.get(assignment.invitation_id) || [];
+    assigned.push(assignment.group_id);
+    groupIdsByInvitation.set(assignment.invitation_id, assigned);
+  });
   return {
     members: members.map((member: Record<string, unknown>) => ({
       ...member,
-      client_name: clientsById.get(String(member.client_id || '')) || ''
+      client_name: clientsById.get(String(member.client_id || '')) || '',
+      group_ids: groupIdsByMember.get(String(member.id)) || []
     })),
     invitations: invitations.map((invitation: Record<string, unknown>) => ({
       ...invitation,
-      client_name: clientsById.get(String(invitation.client_id || '')) || ''
+      client_name: clientsById.get(String(invitation.client_id || '')) || '',
+      group_ids: groupIdsByInvitation.get(String(invitation.id)) || []
     })),
     clients,
+    groups,
     currentUserId: profile.id,
     currentRole: profile.role
   };
+}
+
+function normalizedGroupIds(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map(item => String(item || '').trim()).filter(Boolean))];
+}
+
+async function validatedGroupIds(profile: Profile, role: string, value: unknown) {
+  if (role === 'client') return [];
+  const groupIds = normalizedGroupIds(value);
+  if (!groupIds.length) throw new HttpError(400, 'Escolha pelo menos um grupo responsável.');
+  if (groupIds.some(groupId => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(groupId))) {
+    throw new HttpError(400, 'Um dos grupos escolhidos é inválido.');
+  }
+  const groups = await adminRequest(
+    `/rest/v1/agency_groups?agency_id=eq.${encodeURIComponent(profile.agency_id)}&id=in.(${groupIds.join(',')})&select=id`
+  );
+  if (groups.length !== groupIds.length) {
+    throw new HttpError(400, 'Um dos grupos escolhidos não pertence a esta agência.');
+  }
+  return groupIds;
+}
+
+async function replaceMemberGroups(profile: Profile, memberId: string, groupIds: string[]) {
+  await adminRequest('/rest/v1/rpc/replace_profile_group_responsibilities', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      p_agency_id: profile.agency_id,
+      p_profile_id: memberId,
+      p_group_ids: groupIds
+    })
+  });
 }
 
 function invitationRedirect(request: Request) {
@@ -239,6 +296,7 @@ async function inviteMember(request: Request, profile: Profile, body: Record<str
     );
     if (!clients.length) throw new HttpError(400, 'O cliente escolhido não pertence a esta agência.');
   }
+  const groupIds = await validatedGroupIds(profile, role, body.groupIds);
 
   const existing = await adminRequest(
     `/rest/v1/profiles?email=ilike.${encodeURIComponent(email)}&select=id,agency_id&limit=1`
@@ -261,6 +319,26 @@ async function inviteMember(request: Request, profile: Profile, body: Record<str
       invited_by: profile.id
     })
   });
+
+  try {
+    if (groupIds.length) {
+      await adminRequest('/rest/v1/invitation_group_responsibilities', {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify(groupIds.map(groupId => ({
+          agency_id: profile.agency_id,
+          invitation_id: invitationId,
+          group_id: groupId
+        })))
+      });
+    }
+  } catch (error) {
+    await adminRequest(
+      `/rest/v1/team_invitations?id=eq.${encodeURIComponent(invitationId)}`,
+      { method: 'DELETE', headers: { Prefer: 'return=minimal' } }
+    ).catch(() => {});
+    throw error;
+  }
 
   try {
     await adminRequest(
@@ -286,7 +364,7 @@ async function inviteMember(request: Request, profile: Profile, body: Record<str
 
   return {
     message: `Convite enviado para ${email}.`,
-    invitation: { id: invitationId, email, full_name: fullName, role, client_id: clientId || null }
+    invitation: { id: invitationId, email, full_name: fullName, role, client_id: clientId || null, group_ids: groupIds }
   };
 }
 
@@ -327,6 +405,7 @@ async function updateMember(profile: Profile, body: Record<string, unknown>) {
   const role = body.role == null ? null : String(body.role);
   const clientId = role === 'client' ? String(body.clientId || '') : null;
   const isActive = body.isActive == null ? null : Boolean(body.isActive);
+  const groupIdsProvided = Array.isArray(body.groupIds);
   if (!memberId) throw new HttpError(400, 'Membro inválido.');
   if (role !== null && !['admin', 'member', 'viewer', 'client'].includes(role)) {
     throw new HttpError(400, 'Nível de acesso inválido.');
@@ -334,6 +413,7 @@ async function updateMember(profile: Profile, body: Record<string, unknown>) {
 
   const member = await memberInAgency(profile, memberId);
   assertCanManageMember(profile, member, role);
+  const effectiveRole = role || member.role;
 
   if (role === 'client') {
     if (!clientId) throw new HttpError(400, 'Escolha o cliente deste acesso.');
@@ -342,6 +422,9 @@ async function updateMember(profile: Profile, body: Record<string, unknown>) {
     );
     if (!clients.length) throw new HttpError(400, 'O cliente escolhido não pertence a esta agência.');
   }
+  const groupIds = groupIdsProvided || role === 'client' || (member.role === 'client' && role !== null)
+    ? await validatedGroupIds(profile, effectiveRole, body.groupIds)
+    : null;
 
   const changes: Record<string, unknown> = {};
   if (role !== null) {
@@ -349,17 +432,20 @@ async function updateMember(profile: Profile, body: Record<string, unknown>) {
     changes.client_id = role === 'client' ? clientId : null;
   }
   if (isActive !== null) changes.is_active = isActive;
-  if (!Object.keys(changes).length) {
+  if (!Object.keys(changes).length && groupIds === null) {
     throw new HttpError(400, 'Nenhuma alteração informada.');
   }
 
   if (isActive !== null) await setAuthActive(memberId, isActive);
   try {
-    await adminRequest(`/rest/v1/profiles?id=eq.${encodeURIComponent(memberId)}`, {
-      method: 'PATCH',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify(changes)
-    });
+    if (Object.keys(changes).length) {
+      await adminRequest(`/rest/v1/profiles?id=eq.${encodeURIComponent(memberId)}`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify(changes)
+      });
+    }
+    if (groupIds !== null) await replaceMemberGroups(profile, memberId, groupIds);
   } catch (error) {
     if (isActive !== null) await setAuthActive(memberId, !isActive).catch(() => {});
     throw error;
@@ -370,7 +456,9 @@ async function updateMember(profile: Profile, body: Record<string, unknown>) {
       ? 'Acesso desativado.'
       : isActive === true
         ? 'Acesso reativado.'
-        : `Nível alterado para ${ROLE_LABELS[role || '']}.`
+        : groupIdsProvided && role === null
+          ? 'Grupos responsáveis atualizados.'
+          : `Nível alterado para ${ROLE_LABELS[role || '']}.`
   };
 }
 

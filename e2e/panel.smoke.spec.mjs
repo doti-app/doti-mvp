@@ -129,6 +129,62 @@ test('gestão da equipe exige um cliente ao criar o perfil Cliente da agência',
   await expect(row).toContainText('Vinculado a Café Aurora');
 });
 
+test('integrante vê no filtro somente os grupos atribuídos', async ({ page }) => {
+  await page.addInitScript(() => {
+    const groups = [
+      { id: 'g-atendimento', name: 'Atendimento', initials: 'AT' },
+      { id: 'g-copy', name: 'Copywriting', initials: 'CP' },
+      { id: 'g-design', name: 'Design', initials: 'DS' }
+    ];
+    localStorage.setItem('doti-agency-live-v4', JSON.stringify({
+      version: 4, revision: 0, initialized: true, groups,
+      workflows: [], clients: [], projects: [], deliverables: [], activity: []
+    }));
+    localStorage.setItem('doti-local-team-v1', JSON.stringify({
+      members: [{
+        id: 'local-member-copy', email: 'copy@doti.test', full_name: 'Pessoa Copy',
+        role: 'member', is_active: true, group_ids: ['g-atendimento', 'g-copy']
+      }],
+      invitations: [], currentUserId: 'local-owner', currentRole: 'owner'
+    }));
+  });
+
+  await page.goto('/?localRole=member&localUser=copy%40doti.test#demandas');
+  await expect(page.locator('#groupFilter option')).toHaveText([
+    'Todos os meus grupos', 'Atendimento', 'Copywriting'
+  ]);
+  await expect(page.locator('#groupFilter option', { hasText: 'Design' })).toHaveCount(0);
+  await expect(page.locator('[data-page="equipe"]')).toBeHidden();
+});
+
+test('equipe distribui dados e ações sem vazamento em tela intermediária', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.addInitScript(() => {
+    localStorage.setItem('doti-agency-live-v4', JSON.stringify({
+      version: 4, revision: 0, initialized: true,
+      groups: [{ id: 'g-design', name: 'Design', initials: 'DS' }],
+      workflows: [], clients: [], projects: [], deliverables: [], activity: []
+    }));
+    localStorage.setItem('doti-local-team-v1', JSON.stringify({
+      members: [
+        { id: 'local-owner', email: 'local@doti.dev', full_name: 'Ambiente local', role: 'owner', is_active: true },
+        { id: 'member-pending', email: 'pessoa@doti.test', full_name: 'Pessoa convidada', role: 'member', is_active: true, group_ids: ['g-design'] }
+      ],
+      invitations: [{ id: 'invite-pending', email: 'pessoa@doti.test', full_name: 'Pessoa convidada', role: 'member', status: 'pending', group_ids: ['g-design'] }],
+      currentUserId: 'local-owner', currentRole: 'owner'
+    }));
+  });
+
+  await page.goto('/#equipe');
+  const row = page.locator('.team-member').filter({ hasText: 'pessoa@doti.test' });
+  await expect(row.getByRole('button', { name: /Reenviar e-mail/ })).toHaveText('Reenviar');
+  await expect(row.getByRole('button', { name: /Desativar acesso/ })).toHaveText('Desativar');
+  const layoutColumns = await page.locator('.team-layout').evaluate(element => getComputedStyle(element).gridTemplateColumns);
+  expect(layoutColumns.trim().split(/\s+/)).toHaveLength(1);
+  const overflow = await row.evaluate(element => ({ client: element.clientWidth, scroll: element.scrollWidth }));
+  expect(overflow.scroll).toBeLessThanOrEqual(overflow.client);
+});
+
 test('a rota de login retorna ao painel no modo local', async ({ page }) => {
   await page.goto('/dot-admin/');
   await expect(page).toHaveURL(/\/(?:index\.html)?$/);

@@ -53,13 +53,24 @@ export async function loadAgencyState() {
       ...loaded,
       version: 4,
       initialized: true,
-      revision: Number(loaded.revision || 0)
+      revision: Number(loaded.revision || 0),
+      responsibleGroupIds: auth.profile?.role === 'owner'
+        ? (loaded.groups || []).map(group => group.id)
+        : Array.isArray(auth.profile?.responsible_group_ids)
+          ? auth.profile.responsible_group_ids
+          : (loaded.groups || []).map(group => group.id)
     };
     indexFilePaths(normalized);
     return normalized;
   }
-  const data = await callRpc('load_agency_state');
-  const loaded = data || { version: 4, initialized: false, revision: 0 };
+  const [data, responsibleGroupIds] = await Promise.all([
+    callRpc('load_agency_state'),
+    callRpc('current_responsible_group_ids')
+  ]);
+  const loaded = {
+    ...(data || { version: 4, initialized: false, revision: 0 }),
+    responsibleGroupIds: Array.isArray(responsibleGroupIds) ? responsibleGroupIds : []
+  };
   indexFilePaths(loaded);
   return loaded;
 }
