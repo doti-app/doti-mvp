@@ -43,7 +43,9 @@ async function submitSignup(page, email = 'ana@agencia.test') {
   const password = 'senha-segura';
   await page.goto('/dot-admin/');
   await expect(page.locator('#secondaryAction')).toBeEnabled();
+  await expect(page.locator('#loginIllustration')).toHaveAttribute('src', '/assets/login-illustration.png');
   await page.locator('#secondaryAction').click();
+  await expect(page.locator('#loginIllustration')).toHaveAttribute('src', '/assets/login-signup-illustration.png');
   await expect(page.locator('#fullName')).toBeVisible();
   await expect(page.locator('#agencyName')).toBeVisible();
   await page.locator('#fullName').fill('Ana da Silva');
@@ -88,7 +90,7 @@ test('tentativa repetida mostra a conta existente e não informa sucesso de cada
 
   await submitSignup(page, 'existente@agencia.test');
 
-  await expect(page.locator('#loginTitle')).toContainText(/Bem-vindo\s*de volta/);
+  await expect(page.locator('#loginTitle')).toContainText('Seja bem-vindo!');
   await expect(page.locator('#loginEmail')).toHaveValue('existente@agencia.test');
   await expect(page.locator('#loginStatus')).toContainText('Este e-mail já possui uma conta');
   await expect(page.locator('#loginStatus')).not.toContainText('Conta criada');
@@ -103,7 +105,7 @@ test('conta pendente existente não é apresentada como conta recém-criada', as
 
   await submitSignup(page, 'pendente@agencia.test');
 
-  await expect(page.locator('#loginTitle')).toContainText(/Bem-vindo\s*de volta/);
+  await expect(page.locator('#loginTitle')).toContainText('Seja bem-vindo!');
   await expect(page.locator('#loginEmail')).toHaveValue('pendente@agencia.test');
   await expect(page.locator('#loginStatus')).toContainText('Se já havia um cadastro pendente');
   await expect(page.locator('#loginStatus')).not.toContainText('Conta criada');

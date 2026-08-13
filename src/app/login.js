@@ -9,6 +9,8 @@ const form = document.getElementById('loginForm');
 const emailInput = document.getElementById('loginEmail');
 const passwordInput = document.getElementById('loginPassword');
 const confirmPasswordInput = document.getElementById('confirmPassword');
+const passwordToggle = document.getElementById('passwordToggle');
+const confirmPasswordToggle = document.getElementById('confirmPasswordToggle');
 const fullNameInput = document.getElementById('fullName');
 const agencyNameInput = document.getElementById('agencyName');
 const submitButton = form.querySelector('.login-submit[type="submit"]');
@@ -22,6 +24,9 @@ const confirmAuthLinkButton = document.getElementById('confirmAuthLink');
 const title = document.getElementById('loginTitle');
 const kicker = document.getElementById('loginKicker');
 const description = document.getElementById('loginDescription');
+const illustration = document.getElementById('loginIllustration');
+const experience = document.getElementById('loginExperience');
+const panel = document.querySelector('.login-panel');
 const query = new URLSearchParams(location.search);
 
 let mode = ['reset', 'invite'].includes(query.get('mode')) ? query.get('mode') : 'login';
@@ -34,14 +39,14 @@ let authLinkType = query.get('type') || '';
 const modeContent = {
   login: {
     kicker: 'SEU ESPAÇO DE TRABALHO',
-    title: 'Bem-vindo<br>de volta<span>.</span>',
+    title: 'Seja bem-vindo!',
     description: 'Entre para continuar de onde sua equipe parou.',
     submit: 'Entrar na Doti',
-    secondary: 'Criar minha conta'
+    secondary: 'Criar sua conta'
   },
   signup: {
     kicker: 'COMECE SUA OPERAÇÃO',
-    title: 'Crie sua<br>agência<span>.</span>',
+    title: 'Crie sua agência<span>.</span>',
     description: 'Configure sua identidade e convide a equipe depois.',
     submit: 'Criar conta',
     secondary: 'Já tenho uma conta'
@@ -120,12 +125,21 @@ function updatePendingAuthLinkState() {
 
 function setMode(nextMode) {
   mode = nextMode;
+  form.dataset.mode = mode;
+  panel.dataset.mode = mode;
   const content = modeContent[mode];
   kicker.textContent = content.kicker;
   title.innerHTML = content.title;
   description.textContent = content.description;
   submitLabel.textContent = content.submit;
   secondaryLabel.textContent = content.secondary;
+  const signupMode = mode === 'signup';
+  illustration.src = signupMode
+    ? '/assets/login-signup-illustration.png'
+    : '/assets/login-illustration.png';
+  illustration.alt = signupMode
+    ? 'Ilustração de uma profissional conectando pessoas'
+    : 'Ilustração de uma profissional diante de uma fechadura';
 
   document.querySelectorAll('.signup-only').forEach(field => {
     field.hidden = mode !== 'signup';
@@ -137,6 +151,10 @@ function setMode(nextMode) {
   updatePendingAuthLinkState();
 
   passwordInput.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
+  passwordInput.type = 'password';
+  confirmPasswordInput.type = 'password';
+  passwordToggle.setAttribute('aria-label', 'Mostrar senha');
+  confirmPasswordToggle.setAttribute('aria-label', 'Mostrar confirmação de senha');
   hideConfirmationResend();
   clearStatus();
   form.querySelectorAll('.invalid').forEach(field => field.classList.remove('invalid'));
@@ -144,6 +162,56 @@ function setMode(nextMode) {
     ? confirmAuthLinkButton
     : ['reset', 'invite'].includes(mode) ? passwordInput : mode === 'signup' ? fullNameInput : emailInput;
   setTimeout(() => focusTarget.focus(), 50);
+}
+
+function delay(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+function preloadImage(src) {
+  return new Promise(resolve => {
+    const ImageConstructor = globalThis.Image;
+    if (!ImageConstructor) {
+      resolve();
+      return;
+    }
+    const image = new ImageConstructor();
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    image.addEventListener('load', finish, { once: true });
+    image.addEventListener('error', finish, { once: true });
+    image.src = src;
+    if (image.complete) finish();
+    setTimeout(finish, 500);
+  });
+}
+
+async function switchModeWithLoading(nextMode, illustrationSrc) {
+  secondaryAction.disabled = true;
+  experience.classList.add('mode-switching');
+  try {
+    await Promise.all([
+      preloadImage(illustrationSrc),
+      delay(260)
+    ]);
+    setMode(nextMode);
+    await delay(70);
+  } finally {
+    experience.classList.remove('mode-switching');
+    secondaryAction.disabled = false;
+  }
+}
+
+function openSignupMode() {
+  return switchModeWithLoading('signup', '/assets/login-signup-illustration.png');
+}
+
+function openLoginMode() {
+  return switchModeWithLoading('login', '/assets/login-illustration.png');
 }
 
 function validateEmail() {
@@ -328,7 +396,15 @@ secondaryAction.addEventListener('click', async () => {
   if (mode === 'invite') {
     await supabase?.auth.signOut();
   }
-  setMode(mode === 'login' ? 'signup' : 'login');
+  if (mode === 'login') {
+    await openSignupMode();
+    return;
+  }
+  if (mode === 'signup') {
+    await openLoginMode();
+    return;
+  }
+  setMode('login');
 });
 
 forgotButton.addEventListener('click', () => setMode('recovery'));
@@ -345,16 +421,23 @@ confirmAuthLinkButton.addEventListener('click', async () => {
   }
 });
 
-document.getElementById('passwordToggle').addEventListener('click', event => {
+passwordToggle.addEventListener('click', event => {
   const showing = passwordInput.type === 'text';
   passwordInput.type = showing ? 'password' : 'text';
   event.currentTarget.setAttribute('aria-label', showing ? 'Mostrar senha' : 'Ocultar senha');
   passwordInput.focus();
 });
 
+confirmPasswordToggle.addEventListener('click', event => {
+  const showing = confirmPasswordInput.type === 'text';
+  confirmPasswordInput.type = showing ? 'password' : 'text';
+  event.currentTarget.setAttribute('aria-label', showing ? 'Mostrar confirmação de senha' : 'Ocultar confirmação de senha');
+  confirmPasswordInput.focus();
+});
+
 form.querySelectorAll('input').forEach(input => {
   input.addEventListener('input', () => {
-    input.closest('.login-field').classList.remove('invalid');
+    input.closest('.login-field')?.classList.remove('invalid');
     if (input === emailInput && confirmationEmail && emailInput.value.trim().toLowerCase() !== confirmationEmail.toLowerCase()) {
       hideConfirmationResend();
     }

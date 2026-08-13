@@ -7,7 +7,8 @@
   <title>Entrar na Doti</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preload" as="image" href="/assets/login-signup-illustration.png">
   <link rel="stylesheet" href="/src/styles/login.css">
 </head>
 <body>
@@ -17,46 +18,7 @@
         <img class="login-logo" src="/assets/doti-logo.png" alt="Doti">
         <span class="login-edition"><i></i> Operação criativa, em um só lugar</span>
       </div>
-
-      <div class="login-story-copy">
-        <p class="login-kicker"><span>01</span> Da ideia à entrega</p>
-        <h1>Menos caos.<br><em>Mais fluxo.</em></h1>
-        <p>A central de comando que transforma projetos, entregáveis e aprovações em uma operação que todo mundo entende.</p>
-      </div>
-
-      <div class="workflow-visual" aria-label="Exemplo de fluxo de trabalho">
-        <div class="workflow-orbit orbit-one"></div>
-        <div class="workflow-orbit orbit-two"></div>
-        <article class="floating-card floating-card-main">
-          <header>
-            <span class="card-brand">NOVA CAMPANHA</span>
-            <span class="live-pill"><i></i> Em produção</span>
-          </header>
-          <h2>Lançamento de marca</h2>
-          <p>7 de 10 etapas concluídas</p>
-          <div class="progress-track"><i></i></div>
-          <footer>
-            <div class="avatar-stack"><b>MC</b><b>BR</b><b>+3</b></div>
-            <span>Entrega em 4 dias <strong>→</strong></span>
-          </footer>
-        </article>
-        <article class="floating-card floating-card-step">
-          <span class="step-icon">✓</span>
-          <div><small>ETAPA CONCLUÍDA</small><strong>Copy aprovada</strong></div>
-        </article>
-        <article class="floating-card floating-card-alert">
-          <small>PRÓXIMO PASSO</small>
-          <strong>Design final</strong>
-          <span><i></i> Hoje, 16:00</span>
-        </article>
-        <div class="spark spark-one">✦</div>
-        <div class="spark spark-two">✦</div>
-      </div>
-
-      <div class="login-story-bottom">
-        <p>Projetos <span></span> Fluxos <span></span> Equipes <span></span> Clientes</p>
-        <small>Feito para agências que querem crescer sem perder o controle.</small>
-      </div>
+      <img class="login-illustration" id="loginIllustration" src="/assets/login-illustration.png" alt="Ilustração de uma profissional diante de uma fechadura">
     </section>
 
     <section class="login-panel">
@@ -66,9 +28,8 @@
           <span>OPERAÇÃO CRIATIVA</span>
         </div>
         <div class="login-heading">
-          <span class="login-number">/ 01</span>
           <p class="login-kicker" id="loginKicker">SEU ESPAÇO DE TRABALHO</p>
-          <h2 id="loginTitle">Bem-vindo<br>de volta<span>.</span></h2>
+          <h2 id="loginTitle">Seja bem-vindo!</h2>
           <p id="loginDescription">Entre para continuar de onde sua equipe parou.</p>
         </div>
 
@@ -117,25 +78,25 @@
             <div>
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
               <input id="confirmPassword" type="password" autocomplete="new-password" placeholder="Repita sua senha">
+              <button class="password-toggle" id="confirmPasswordToggle" type="button" aria-label="Mostrar confirmação de senha">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+              </button>
             </div>
             <small class="field-error">As senhas precisam ser iguais.</small>
           </label>
 
           <div class="login-options login-only">
-            <span class="secure-session"><i>✓</i> Sessão protegida</span>
+            <label class="remember-check"><input type="checkbox" checked><span></span> Lembrar-me</label>
             <button class="forgot-link" type="button" id="forgotPassword">Esqueci minha senha</button>
           </div>
 
           <p class="login-form-status" id="loginStatus" role="alert" aria-live="polite"></p>
           <button class="forgot-link confirmation-resend" id="resendConfirmation" type="button" hidden>Reenviar e-mail de confirmação</button>
-          <button class="login-submit" id="confirmAuthLink" type="button" hidden><span>Confirmar e continuar</span><b>→</b></button>
-          <button class="login-submit" type="submit"><span>Entrar na Doti</span><b>→</b></button>
-          <button class="demo-access secondary-action" type="button" id="secondaryAction"><span>Criar minha conta</span><b>↗</b></button>
+          <button class="login-submit" id="confirmAuthLink" type="button" hidden><span>Confirmar e continuar</span><b class="login-submit-arrows" aria-hidden="true"><img src="/assets/login-arrow-icon.png" alt=""></b></button>
+          <button class="login-submit" type="submit"><span>Entrar na Doti</span><b class="login-submit-arrows" aria-hidden="true"><img src="/assets/login-arrow-icon.png" alt=""></b></button>
+          <button class="demo-access secondary-action" type="button" id="secondaryAction"><small>ou</small><span>Criar sua conta</span></button>
         </form>
-
-        <p class="login-support" id="loginSupport">Ao continuar, você concorda com os termos de uso e privacidade da Doti.</p>
       </div>
-      <footer class="login-footer"><span>© 2026 Doti</span><span>Privacidade &nbsp;·&nbsp; Segurança</span></footer>
     </section>
   </main>
   <script src="/assets/vendor/supabase-2.57.4.js"></script>
