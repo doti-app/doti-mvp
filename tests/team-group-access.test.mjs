@@ -15,6 +15,10 @@ const indexMigration = readFileSync(
   new URL('../supabase/migrations/20260813141845_index_team_group_responsibilities.sql', import.meta.url),
   'utf8'
 );
+const grantMigration = readFileSync(
+  new URL('../supabase/migrations/20260813161824_grant_team_admin_group_read_access.sql', import.meta.url),
+  'utf8'
+);
 const teamFunction = readFileSync(new URL('../supabase/functions/team-admin/index.ts', import.meta.url), 'utf8');
 const operationUi = readFileSync(new URL('../src/domains/operation/ui/operation-controller.js', import.meta.url), 'utf8');
 
@@ -49,6 +53,12 @@ test('responsabilidades usam relações protegidas e são copiadas do convite pa
 test('consultas de responsabilidades possuem índices compostos por agência', () => {
   assert.match(indexMigration, /profile_group_responsibilities \(agency_id, profile_id\)/i);
   assert.match(indexMigration, /invitation_group_responsibilities \(agency_id, invitation_id\)/i);
+});
+
+test('administração recebe somente leitura dos grupos via service role', () => {
+  assert.match(grantMigration, /revoke insert, update, delete[\s\S]*agency_groups from service_role/i);
+  assert.match(grantMigration, /grant select[\s\S]*agency_groups to service_role/i);
+  assert.doesNotMatch(grantMigration, /grant[\s\S]*(insert|update|delete)[\s\S]*agency_groups to service_role/i);
 });
 
 test('convite, edição e filtro carregam os grupos atribuídos', () => {
