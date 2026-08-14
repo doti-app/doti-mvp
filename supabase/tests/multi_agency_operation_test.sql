@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap;
-select plan(35);
+select plan(38);
 
 insert into auth.users (id, email)
 values
@@ -276,6 +276,69 @@ select throws_ok(
   '40001',
   null,
   'stale agency revision is rejected'
+);
+
+select lives_ok(
+  $$select public.save_agency_state(
+    '{
+      "version": 4,
+      "groups": [
+        {"id":"41000000-0000-4000-8000-000000000001","name":"Atendimento","initials":"AT"}
+      ],
+      "workflows": [
+        {
+          "id":"42000000-0000-4000-8000-000000000001",
+          "name":"Fluxo editável",
+          "category":"Conteúdo",
+          "steps":[
+            ["Briefing","41000000-0000-4000-8000-000000000001","43000000-0000-4000-8000-000000000001"],
+            ["Produção","41000000-0000-4000-8000-000000000001","43000000-0000-4000-8000-000000000002"]
+          ]
+        }
+      ],
+      "clients":[],"projects":[],"deliverables":[],"activity":[]
+    }'::jsonb,
+    1
+  )$$,
+  'owner can create a workflow before editing its steps'
+);
+
+select lives_ok(
+  $$select public.save_agency_state(
+    '{
+      "version": 4,
+      "groups": [
+        {"id":"41000000-0000-4000-8000-000000000001","name":"Atendimento","initials":"AT"}
+      ],
+      "workflows": [
+        {
+          "id":"42000000-0000-4000-8000-000000000001",
+          "name":"Fluxo editável",
+          "category":"Conteúdo",
+          "steps":[
+            ["Produção","41000000-0000-4000-8000-000000000001","43000000-0000-4000-8000-000000000002"],
+            ["Revisão","41000000-0000-4000-8000-000000000001","43000000-0000-4000-8000-000000000003"],
+            ["Briefing","41000000-0000-4000-8000-000000000001","43000000-0000-4000-8000-000000000001"]
+          ]
+        }
+      ],
+      "clients":[],"projects":[],"deliverables":[],"activity":[]
+    }'::jsonb,
+    2
+  )$$,
+  'owner can reorder existing workflow steps and add a new one atomically'
+);
+
+select results_eq(
+  $$select id::text
+    from public.workflow_steps
+    where workflow_id = '42000000-0000-4000-8000-000000000001'
+    order by position$$,
+  $$values
+    ('43000000-0000-4000-8000-000000000002'),
+    ('43000000-0000-4000-8000-000000000003'),
+    ('43000000-0000-4000-8000-000000000001')$$,
+  'workflow steps persist in the edited order'
 );
 
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
