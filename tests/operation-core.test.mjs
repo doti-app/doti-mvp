@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createOperationFiles } from '../src/domains/operation/domain/files.js';
-import { recordActivity } from '../src/domains/operation/domain/commands.js';
+import { recordActivity, synchronizeActiveDeliverables } from '../src/domains/operation/domain/commands.js';
 import { createOperationPersistence } from '../src/domains/operation/domain/persistence.js';
 import { operationRpcHeaders } from '../src/domains/operation/infrastructure/agency-store.js';
 import {
@@ -61,6 +61,42 @@ test('cria estados vazios independentes e registra atividades com limite', () =>
   recordActivity(first, 'Criado', 'Novo projeto', () => 'new', () => '2026-08-06T12:00:00.000Z');
   assert.equal(first.activity.length, 50);
   assert.deepEqual(first.activity[0], { id: 'new', action: 'Criado', detail: 'Novo projeto', at: '2026-08-06T12:00:00.000Z' });
+});
+
+test('sincroniza edições do fluxo com demandas ativas sem alterar o histórico concluído', () => {
+  const workflow = {
+    id: 'wf',
+    steps: [
+      ['Produção atualizada', 'design', 'ws-b'],
+      ['Revisão', 'revisao', 'ws-c'],
+      ['Briefing', 'atendimento', 'ws-a'],
+      ['Publicação', 'midia', 'ws-d']
+    ]
+  };
+  const active = {
+    id: 'active', projectId: 'project', workflowId: 'wf', status: 'active', stepIndex: 1,
+    steps: [
+      { id: 'step-a', sourceStepId: 'ws-a', name: 'Briefing', groupId: 'atendimento', due: '', tasks: [], note: '' },
+      { id: 'step-b', sourceStepId: 'ws-b', name: 'Produção', groupId: 'design', due: '2026-08-20', tasks: [{ id: 'task', title: 'Criar peça' }], note: 'Referência' },
+      { id: 'step-c', sourceStepId: 'ws-c', name: 'Revisão', groupId: 'revisao', due: '', tasks: [], note: '' }
+    ]
+  };
+  const completed = { id: 'done', workflowId: 'wf', status: 'done', stepIndex: 0, steps: structuredClone(active.steps) };
+  const state = { projects: [{ id: 'project', updatedAt: 'old' }], deliverables: [active, completed] };
+
+  assert.equal(synchronizeActiveDeliverables(state, workflow, () => 'step-d', () => '2026-08-14T14:00:00.000Z'), 1);
+  assert.deepEqual(active.steps.map(step => step.id), ['step-b', 'step-c', 'step-a', 'step-d']);
+  assert.equal(active.stepIndex, 0);
+  assert.equal(active.steps[0].name, 'Produção atualizada');
+  assert.equal(state.projects[0].updatedAt, '2026-08-14T14:00:00.000Z');
+  assert.equal(completed.steps[0].id, 'step-a');
+
+  workflow.steps = workflow.steps.filter(step => step[2] !== 'ws-b');
+  synchronizeActiveDeliverables(state, workflow, () => 'unused', () => '2026-08-14T14:01:00.000Z');
+  assert.deepEqual(active.steps.map(step => step.id), ['step-c', 'step-a', 'step-d']);
+  assert.deepEqual(active.steps[0].tasks, [{ id: 'task', title: 'Criar peça' }]);
+  assert.match(active.steps[0].note, /Migrado de Produção atualizada.*Referência/);
+  assert.equal(active.steps[0].due, '2026-08-20');
 });
 
 test('calcula prazo, atraso e macrostatus a partir do estado do entregável', () => {
