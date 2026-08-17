@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap;
-select plan(35);
+select plan(42);
 
 insert into auth.users (id, email)
 values
@@ -276,6 +276,137 @@ select throws_ok(
   '40001',
   null,
   'stale agency revision is rejected'
+);
+
+select lives_ok(
+  $$select public.save_agency_state(
+    '{
+      "version":4,
+      "groups":[{"id":"41000000-0000-4000-8000-000000000001","name":"Atendimento","initials":"AT"}],
+      "workflows":[{
+        "id":"42000000-0000-4000-8000-000000000001","name":"Fluxo editável","category":"Conteúdo",
+        "steps":[
+          ["Briefing","41000000-0000-4000-8000-000000000001","43000000-0000-4000-8000-000000000001"],
+          ["Produção","41000000-0000-4000-8000-000000000001","43000000-0000-4000-8000-000000000002"],
+          ["Revisão","41000000-0000-4000-8000-000000000001","43000000-0000-4000-8000-000000000003"]
+        ]
+      }],
+      "clients":[{"id":"44000000-0000-4000-8000-000000000001","name":"Cliente do fluxo","color":"#ffd400","workspace":[
+        {"id":"45000000-0000-4000-8000-000000000001","type":"text","text":"Primeiro"},
+        {"id":"45000000-0000-4000-8000-000000000002","type":"text","text":"Segundo"}
+      ]}],
+      "projects":[{"id":"46000000-0000-4000-8000-000000000001","clientId":"44000000-0000-4000-8000-000000000001","name":"Projeto do fluxo","due":"2026-08-31"}],
+      "deliverables":[{
+        "id":"47000000-0000-4000-8000-000000000001","projectId":"46000000-0000-4000-8000-000000000001","workflowId":"42000000-0000-4000-8000-000000000001",
+        "name":"Demanda ativa","category":"Conteúdo","status":"active","stepIndex":1,
+        "steps":[
+          {"id":"48000000-0000-4000-8000-000000000001","sourceStepId":"43000000-0000-4000-8000-000000000001","groupId":"41000000-0000-4000-8000-000000000001","name":"Briefing","tasks":[]},
+          {"id":"48000000-0000-4000-8000-000000000002","sourceStepId":"43000000-0000-4000-8000-000000000002","groupId":"41000000-0000-4000-8000-000000000001","name":"Produção","tasks":[{"id":"49000000-0000-4000-8000-000000000001","title":"Tarefa preservada","done":false}]},
+          {"id":"48000000-0000-4000-8000-000000000003","sourceStepId":"43000000-0000-4000-8000-000000000003","groupId":"41000000-0000-4000-8000-000000000001","name":"Revisão","tasks":[]}
+        ]
+      }],
+      "activity":[]
+    }'::jsonb,
+    1
+  )$$,
+  'owner can create a workflow and an active demand from it'
+);
+
+select lives_ok(
+  $$select public.save_agency_state(
+    '{
+      "version":4,
+      "groups":[{"id":"41000000-0000-4000-8000-000000000001","name":"Atendimento","initials":"AT"}],
+      "workflows":[{
+        "id":"42000000-0000-4000-8000-000000000001","name":"Fluxo editável","category":"Conteúdo",
+        "steps":[
+          ["Produção","41000000-0000-4000-8000-000000000001","43000000-0000-4000-8000-000000000002"],
+          ["Revisão","41000000-0000-4000-8000-000000000001","43000000-0000-4000-8000-000000000003"],
+          ["Briefing","41000000-0000-4000-8000-000000000001","43000000-0000-4000-8000-000000000001"],
+          ["Publicação","41000000-0000-4000-8000-000000000001","43000000-0000-4000-8000-000000000004"]
+        ]
+      }],
+      "clients":[{"id":"44000000-0000-4000-8000-000000000001","name":"Cliente do fluxo","color":"#ffd400","workspace":[
+        {"id":"45000000-0000-4000-8000-000000000002","type":"text","text":"Segundo"},
+        {"id":"45000000-0000-4000-8000-000000000001","type":"text","text":"Primeiro"}
+      ]}],
+      "projects":[{"id":"46000000-0000-4000-8000-000000000001","clientId":"44000000-0000-4000-8000-000000000001","name":"Projeto do fluxo","due":"2026-08-31"}],
+      "deliverables":[{
+        "id":"47000000-0000-4000-8000-000000000001","projectId":"46000000-0000-4000-8000-000000000001","workflowId":"42000000-0000-4000-8000-000000000001",
+        "name":"Demanda ativa","category":"Conteúdo","status":"active","stepIndex":0,
+        "steps":[
+          {"id":"48000000-0000-4000-8000-000000000002","sourceStepId":"43000000-0000-4000-8000-000000000002","groupId":"41000000-0000-4000-8000-000000000001","name":"Produção","tasks":[{"id":"49000000-0000-4000-8000-000000000001","title":"Tarefa preservada","done":false}]},
+          {"id":"48000000-0000-4000-8000-000000000003","sourceStepId":"43000000-0000-4000-8000-000000000003","groupId":"41000000-0000-4000-8000-000000000001","name":"Revisão","tasks":[]},
+          {"id":"48000000-0000-4000-8000-000000000001","sourceStepId":"43000000-0000-4000-8000-000000000001","groupId":"41000000-0000-4000-8000-000000000001","name":"Briefing","tasks":[]},
+          {"id":"48000000-0000-4000-8000-000000000004","sourceStepId":"43000000-0000-4000-8000-000000000004","groupId":"41000000-0000-4000-8000-000000000001","name":"Publicação","tasks":[]}
+        ]
+      }],
+      "activity":[]
+    }'::jsonb,
+    2
+  )$$,
+  'owner can reorder a workflow, its active demand and workspace blocks atomically'
+);
+
+select results_eq(
+  $$select id::text from public.workflow_steps
+    where workflow_id = '42000000-0000-4000-8000-000000000001' order by position$$,
+  $$values
+    ('43000000-0000-4000-8000-000000000002'),
+    ('43000000-0000-4000-8000-000000000003'),
+    ('43000000-0000-4000-8000-000000000001'),
+    ('43000000-0000-4000-8000-000000000004')$$,
+  'workflow steps persist in the edited order'
+);
+
+select results_eq(
+  $$select source_workflow_step_id::text from public.deliverable_steps
+    where deliverable_id = '47000000-0000-4000-8000-000000000001' order by position$$,
+  $$values
+    ('43000000-0000-4000-8000-000000000002'),
+    ('43000000-0000-4000-8000-000000000003'),
+    ('43000000-0000-4000-8000-000000000001'),
+    ('43000000-0000-4000-8000-000000000004')$$,
+  'active demand steps follow the edited workflow order'
+);
+
+select lives_ok(
+  $$select public.save_agency_state(
+    '{
+      "version":4,
+      "groups":[{"id":"41000000-0000-4000-8000-000000000001","name":"Atendimento","initials":"AT"}],
+      "workflows":[{"id":"42000000-0000-4000-8000-000000000001","name":"Fluxo editável","category":"Conteúdo","steps":[
+        ["Revisão","41000000-0000-4000-8000-000000000001","43000000-0000-4000-8000-000000000003"],
+        ["Briefing","41000000-0000-4000-8000-000000000001","43000000-0000-4000-8000-000000000001"],
+        ["Publicação","41000000-0000-4000-8000-000000000001","43000000-0000-4000-8000-000000000004"]
+      ]}],
+      "clients":[{"id":"44000000-0000-4000-8000-000000000001","name":"Cliente do fluxo","color":"#ffd400","workspace":[]}],
+      "projects":[{"id":"46000000-0000-4000-8000-000000000001","clientId":"44000000-0000-4000-8000-000000000001","name":"Projeto do fluxo","due":"2026-08-31"}],
+      "deliverables":[{
+        "id":"47000000-0000-4000-8000-000000000001","projectId":"46000000-0000-4000-8000-000000000001","workflowId":"42000000-0000-4000-8000-000000000001",
+        "name":"Demanda ativa","category":"Conteúdo","status":"active","stepIndex":0,"steps":[
+          {"id":"48000000-0000-4000-8000-000000000003","sourceStepId":"43000000-0000-4000-8000-000000000003","groupId":"41000000-0000-4000-8000-000000000001","name":"Revisão","tasks":[{"id":"49000000-0000-4000-8000-000000000001","title":"Tarefa preservada","done":false}]},
+          {"id":"48000000-0000-4000-8000-000000000001","sourceStepId":"43000000-0000-4000-8000-000000000001","groupId":"41000000-0000-4000-8000-000000000001","name":"Briefing","tasks":[]},
+          {"id":"48000000-0000-4000-8000-000000000004","sourceStepId":"43000000-0000-4000-8000-000000000004","groupId":"41000000-0000-4000-8000-000000000001","name":"Publicação","tasks":[]}
+        ]
+      }],
+      "activity":[]
+    }'::jsonb,
+    3
+  )$$,
+  'removing a workflow step migrates its task before deleting the old demand step'
+);
+
+select is(
+  (select deliverable_step_id::text from public.step_tasks where id = '49000000-0000-4000-8000-000000000001'),
+  '48000000-0000-4000-8000-000000000003',
+  'migrated task stays attached to the selected surviving demand step'
+);
+
+select is(
+  (select count(*)::integer from public.deliverable_steps where id = '48000000-0000-4000-8000-000000000002'),
+  0,
+  'removed demand step is deleted after its task is migrated'
 );
 
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
