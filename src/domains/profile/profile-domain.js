@@ -1,3 +1,13 @@
+import {
+  PROFILE_AVATAR_BUCKET,
+  createStoredAvatarReference,
+  isLocalPhoto,
+  resolveAvatarImageUrl,
+  storedAvatarParts,
+  storedAvatarPath,
+  validAvatar
+} from '../../shared/profile-avatar.js';
+
 /** @param {{ auth: any, events?: EventTarget, document?: Document }} dependencies */
 export function createProfileDomain({ auth, events = new EventTarget(), document: documentRef = globalThis.document }) {
 const document = documentRef;
@@ -43,25 +53,12 @@ function initials(name) {
     .toUpperCase();
 }
 
-function isCustomPhoto(value) {
-  return /^data:image\/(jpeg|png|webp);base64,/i.test(String(value || ''));
-}
-
-function validAvatar(value) {
-  const avatar = String(value || '');
-  if (AVATARS.includes(avatar)) return avatar;
-  if (isCustomPhoto(avatar) && /^[a-z0-9+/=]+$/i.test(avatar.split(',')[1] || '') && avatar.length <= 900000) {
-    return avatar;
-  }
-  return '';
-}
-
-function setAvatar(element, avatarUrl, fullName) {
+async function setAvatar(element, avatarUrl, fullName) {
   if (!element) return;
   element.replaceChildren();
   const safeAvatar = validAvatar(avatarUrl);
   element.classList.toggle('has-image', Boolean(safeAvatar));
-  element.classList.toggle('has-custom-photo', isCustomPhoto(safeAvatar));
+  element.classList.toggle('has-custom-photo', isLocalPhoto(safeAvatar) || Boolean(storedAvatarParts(safeAvatar)));
   if (element === avatarPreview) {
     avatarPreviewWrap.classList.toggle('has-image', Boolean(safeAvatar));
   }
@@ -69,8 +66,15 @@ function setAvatar(element, avatarUrl, fullName) {
     element.textContent = initials(fullName);
     return;
   }
+  const imageUrl = await resolveAvatarImageUrl(safeAvatar, authContext?.supabase);
+  if (!imageUrl) {
+    element.classList.remove('has-image', 'has-custom-photo');
+    if (element === avatarPreview) avatarPreviewWrap.classList.remove('has-image');
+    element.textContent = initials(fullName);
+    return;
+  }
   const image = document.createElement('img');
-  image.src = safeAvatar;
+  image.src = imageUrl;
   image.alt = '';
   element.appendChild(image);
 }
@@ -154,15 +158,19 @@ async function preparePhoto(file) {
   return canvas.toDataURL('image/jpeg', 0.84);
 }
 
-function applyProfile(profile) {
+async function applyProfile(profile) {
   fullNameInput.value = profile.full_name || '';
   emailInput.value = profile.email || authContext?.user?.email || '';
   roleInput.value = ROLE_LABELS[profile.role] || 'Membro';
   selectedAvatar = validAvatar(profile.avatar_url);
-  photoLabel.textContent = isCustomPhoto(selectedAvatar) ? 'Foto selecionada' : 'Nenhuma foto enviada';
+  photoLabel.textContent = (isLocalPhoto(selectedAvatar) || storedAvatarParts(selectedAvatar))
+    ? 'Foto selecionada'
+    : 'Nenhuma foto enviada';
 
-  setAvatar(avatarPreview, selectedAvatar, profile.full_name);
-  setAvatar(document.querySelector('.profile .avatar'), selectedAvatar, profile.full_name);
+  await Promise.all([
+    setAvatar(avatarPreview, selectedAvatar, profile.full_name),
+    setAvatar(document.querySelector('.profile .avatar'), selectedAvatar, profile.full_name)
+  ]);
 
   const sidebarProfile = document.querySelector('.profile');
   if (sidebarProfile) {
@@ -184,7 +192,7 @@ function renderAvatarPicker() {
   `).join('');
 }
 
-function initializeProfile(context) {
+async function initializeProfile(context) {
   authContext = context;
   const profile = context.localMode
     ? readLocalProfile(context.profile)
@@ -199,7 +207,7 @@ function initializeProfile(context) {
       ? 'No modo local, as alterações ficam somente neste navegador.'
       : 'Nome e avatar são salvos com segurança no perfil da sua conta.';
   form.querySelector('[type="submit"]').disabled = Boolean(context.supportMode);
-  applyProfile(profile);
+  await applyProfile(profile);
 
   if (context.supportMode) {
     fullNameInput.readOnly = true;
@@ -207,16 +215,14 @@ function initializeProfile(context) {
     avatarRemoveButton.disabled = true;
   }
 
-  photoInput.disabled = !context.localMode;
-  photoInput.closest('.profile-photo-upload')?.classList.toggle('is-disabled', !context.localMode);
-  if (!context.localMode) {
-    photoLabel.textContent = 'Envio de foto disponível no modo local';
-  }
+  photoInput.disabled = Boolean(context.supportMode);
+  photoInput.closest('.profile-photo-upload')?.classList.toggle('is-disabled', Boolean(context.supportMode));
+  if (context.supportMode) photoLabel.textContent = 'Edite a foto pelo portal interno';
 }
 
 renderAvatarPicker();
 
-avatarPicker.addEventListener('click', event => {
+avatarPicker.addEventListener('click', async event => {
   const button = event.target.closest('[data-avatar]');
   if (!button) return;
   selectedAvatar = button.dataset.avatar;
@@ -226,7 +232,7 @@ avatarPicker.addEventListener('click', event => {
     item.classList.toggle('selected', selected);
     item.setAttribute('aria-pressed', String(selected));
   });
-  setAvatar(avatarPreview, selectedAvatar, fullNameInput.value);
+  await setAvatar(avatarPreview, selectedAvatar, fullNameInput.value);
   showStatus('');
 });
 
@@ -241,7 +247,7 @@ photoInput.addEventListener('change', async () => {
       item.setAttribute('aria-pressed', 'false');
     });
     photoLabel.textContent = file.name;
-    setAvatar(avatarPreview, selectedAvatar, fullNameInput.value);
+    await setAvatar(avatarPreview, selectedAvatar, fullNameInput.value);
     showStatus('Foto pronta. Clique em salvar alterações para confirmar.');
   } catch (error) {
     showStatus(error.message || 'Não foi possível usar essa foto.', true);
@@ -250,19 +256,19 @@ photoInput.addEventListener('change', async () => {
   }
 });
 
-avatarRemoveButton.addEventListener('click', () => {
+avatarRemoveButton.addEventListener('click', async () => {
   selectedAvatar = '';
   avatarPicker.querySelectorAll('[data-avatar]').forEach(item => {
     item.classList.remove('selected');
     item.setAttribute('aria-pressed', 'false');
   });
   photoLabel.textContent = 'Nenhuma foto enviada';
-  setAvatar(avatarPreview, selectedAvatar, fullNameInput.value);
+  await setAvatar(avatarPreview, selectedAvatar, fullNameInput.value);
   showStatus('Imagem removida. Clique em salvar alterações para confirmar.');
 });
 
-fullNameInput.addEventListener('input', () => {
-  setAvatar(avatarPreview, selectedAvatar, fullNameInput.value);
+fullNameInput.addEventListener('input', async () => {
+  await setAvatar(avatarPreview, selectedAvatar, fullNameInput.value);
   showStatus('');
 });
 
@@ -278,11 +284,6 @@ form.addEventListener('submit', async event => {
     fullNameInput.focus();
     return;
   }
-  if (!authContext.localMode && isCustomPhoto(selectedAvatar)) {
-    showStatus('O envio de foto ainda está disponível somente no modo local.', true);
-    return;
-  }
-
   const submit = form.querySelector('[type="submit"]');
   submit.disabled = true;
   submit.textContent = 'Salvando…';
@@ -302,11 +303,26 @@ form.addEventListener('submit', async event => {
       }));
       syncLocalTeam(profile);
     } else {
+      const previousAvatar = validAvatar(authContext.profile.avatar_url, { allowLocalPhoto: false });
+      let avatarForSave = selectedAvatar;
+      if (isLocalPhoto(selectedAvatar)) {
+        const photoBlob = await fetch(selectedAvatar).then(response => response.blob());
+        const avatarReference = createStoredAvatarReference(authContext.user.id);
+        const { error: uploadError } = await authContext.supabase.storage
+          .from(PROFILE_AVATAR_BUCKET)
+          .upload(storedAvatarPath(avatarReference), photoBlob, {
+            cacheControl: '3600',
+            contentType: 'image/jpeg',
+            upsert: true
+          });
+        if (uploadError) throw new Error(uploadError.message || 'Não foi possível enviar a foto.');
+        avatarForSave = avatarReference;
+      }
       const { data, error } = await authContext.supabase.functions.invoke('team-admin', {
         body: {
           action: 'update_profile',
           fullName,
-          avatarUrl: selectedAvatar
+          avatarUrl: avatarForSave
         }
       });
       if (error) {
@@ -319,13 +335,19 @@ form.addEventListener('submit', async event => {
       }
       profile = data?.profile;
       if (!profile) throw new Error('O perfil atualizado não foi retornado.');
+      if (storedAvatarParts(previousAvatar) && !storedAvatarParts(avatarForSave)) {
+        await authContext.supabase.storage
+          .from(PROFILE_AVATAR_BUCKET)
+          .remove([storedAvatarPath(previousAvatar)])
+          .catch(() => {});
+      }
     }
 
     authContext.profile = profile;
     if (authContext.user?.user_metadata) {
       authContext.user.user_metadata.full_name = profile.full_name;
     }
-    applyProfile(profile);
+    await applyProfile(profile);
     showStatus(authContext.localMode
       ? 'Alterações salvas somente neste navegador.'
       : 'Alterações salvas no seu perfil.');
@@ -342,10 +364,10 @@ form.addEventListener('submit', async event => {
 let mounted = false;
 return {
   id: 'profile',
-  mount() {
+  async mount() {
     if (mounted) return;
     mounted = true;
-    initializeProfile(auth);
+    await initializeProfile(auth);
   },
   unmount() {
     mounted = false;

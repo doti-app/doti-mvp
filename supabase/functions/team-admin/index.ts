@@ -145,7 +145,9 @@ async function updateProfile(request: Request, body: Record<string, unknown>) {
   if (fullName.length < 2 || fullName.length > 120) {
     throw new HttpError(400, 'Informe um nome com 2 a 120 caracteres.');
   }
-  if (!/^\/assets\/avatars-users\/avatar-(0[1-9]|[12][0-9]|30)\.png$/.test(avatarUrl)) {
+  const presetAvatar = /^\/assets\/avatars-users\/avatar-(0[1-9]|[12][0-9]|30)\.png$/.test(avatarUrl);
+  const storedAvatar = new RegExp(`^profile-avatar:${user.id.toLowerCase()}:\\d{1,16}$`, 'i').test(avatarUrl);
+  if (avatarUrl && !presetAvatar && !storedAvatar) {
     throw new HttpError(400, 'Escolha um avatar válido.');
   }
 

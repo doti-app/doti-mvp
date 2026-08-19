@@ -1,4 +1,5 @@
 import { getAuthConfig, getSupabase, getSupabaseForAgency } from './supabase-client.js';
+import { resolveAvatarImageUrl, validAvatar } from '../profile-avatar.js';
 
 let authContext = null;
 let stopSubscription = () => {};
@@ -79,20 +80,21 @@ function startLocalMode() {
   return authContext;
 }
 
-function validAvatar(value) {
-  return /^\/assets\/avatars-users\/avatar-(0[1-9]|[12][0-9]|30)\.png$/.test(String(value || ''))
-    ? String(value)
-    : '';
-}
-
-function renderAvatar(element, profile) {
+async function renderAvatar(element, profile, supabase) {
   if (!element) return;
   const avatarUrl = validAvatar(profile.avatar_url);
   element.replaceChildren();
   element.classList.toggle('has-image', Boolean(avatarUrl));
   if (avatarUrl) {
+    const imageUrl = await resolveAvatarImageUrl(avatarUrl, supabase);
+    if (!imageUrl) {
+      element.classList.remove('has-image');
+      element.textContent = String(profile.full_name || '?')
+        .split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+      return;
+    }
     const image = document.createElement('img');
-    image.src = avatarUrl;
+    image.src = imageUrl;
     image.alt = '';
     element.appendChild(image);
     return;
@@ -261,7 +263,7 @@ async function protectPanel() {
       profileElement.querySelector('small').textContent = supportMode
         ? `${agencyName} · suporte DOT ${roleLabels[profile?.role] || 'membro'}`
         : `${agencyName} · ${roleLabels[profile?.role] || 'membro'}`;
-      renderAvatar(profileElement.querySelector('.avatar'), profile);
+      await renderAvatar(profileElement.querySelector('.avatar'), profile, supabase);
       profileElement.title = user.email;
     }
 
