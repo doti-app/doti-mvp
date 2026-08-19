@@ -1,4 +1,5 @@
 import { getAuthConfig, getSupabase, getSupabaseForAgency } from './supabase-client.js';
+import { getValidSession, scheduleSessionExpiry } from './session-policy.js';
 
 let authContext = null;
 let stopSubscription = () => {};
@@ -167,7 +168,7 @@ async function protectPanel() {
       return startLocalMode();
     }
     const baseSupabase = await getSupabase();
-    const { data: { session }, error } = await baseSupabase.auth.getSession();
+    const { session, error } = await getValidSession(baseSupabase);
     if (error) throw error;
     if (!session) {
       location.replace('/dot-admin/?reason=expired');
@@ -292,7 +293,13 @@ async function protectPanel() {
       }
       if (event === 'SIGNED_OUT') location.replace('/dot-admin/');
     });
-    stopSubscription = () => data.subscription.unsubscribe();
+    const stopExpiry = scheduleSessionExpiry(baseSupabase, session, () => {
+      location.replace('/dot-admin/?reason=expired');
+    });
+    stopSubscription = () => {
+      data.subscription.unsubscribe();
+      stopExpiry();
+    };
     document.documentElement.classList.remove('auth-pending');
     return authContext;
   } catch (_) {

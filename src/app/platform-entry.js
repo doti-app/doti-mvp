@@ -1,4 +1,5 @@
 import { getAuthConfig, getSupabase } from '../shared/auth/supabase-client.js';
+import { getValidSession, scheduleSessionExpiry } from '../shared/auth/session-policy.js';
 
 const state = { supabase: null, context: null, overview: null, accounts: null, staff: null, audit: null, toastTimer: null };
 const roles = { owner: 'Proprietário', admin: 'Administrador', member: 'Membro', viewer: 'Visualizador', client: 'Cliente da agência' };
@@ -211,12 +212,12 @@ function bindEvents() {
 async function start() {
   try {
     const config = await getAuthConfig(); if (config.localMode) { location.replace('/'); return; }
-    state.supabase = await getSupabase(); const { data: session } = await state.supabase.auth.getSession(); if (!session.session) { location.replace('/dot-admin/?reason=expired'); return; }
+    state.supabase = await getSupabase(); const { session } = await getValidSession(state.supabase); if (!session) { location.replace('/dot-admin/?reason=expired'); return; }
     const { data: context, error } = await state.supabase.rpc('get_account_context'); if (error) throw error; if (!context?.platform?.isActive) { location.replace(context?.personalAgency ? '/' : '/dot-admin/?reason=unauthorized'); return; }
     state.context = context; const person = context.platform; byId('platformAvatar').textContent = person.fullName.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
     byId('platformUserName').textContent = person.fullName; byId('platformUserRole').textContent = roles[person.role] || person.role; if (context.personalAgency?.status === 'active') byId('personalAgencyButton').hidden = false;
     if (!admin()) document.querySelectorAll('[data-admin-only]').forEach(element => { element.hidden = true; });
-    bindEvents(); document.documentElement.classList.remove('platform-auth-pending');
+    bindEvents(); scheduleSessionExpiry(state.supabase, session, () => location.replace('/dot-admin/?reason=expired')); document.documentElement.classList.remove('platform-auth-pending');
     try { await loadOverview(); }
     catch (error) { console.error(error); toast('Não foi possível carregar o portal DOT', error.message); }
   } catch (error) { console.error(error); location.replace('/dot-admin/?reason=unauthorized'); }
