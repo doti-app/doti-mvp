@@ -1,4 +1,4 @@
-export const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
+export const SESSION_MAX_AGE_MS = 4 * 60 * 60 * 1000;
 
 function accessTokenIssuedAt(accessToken) {
   try {

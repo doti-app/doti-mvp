@@ -15,14 +15,14 @@ function sessionAt(date) {
   };
 }
 
-test('a sessão continua válida antes de completar oito horas', () => {
+test('a sessão continua válida antes de completar quatro horas', () => {
   const signedInAt = new Date(2026, 7, 19, 8, 30);
   const session = sessionAt(signedInAt);
-  assert.equal(SESSION_MAX_AGE_MS, 8 * 60 * 60 * 1000);
+  assert.equal(SESSION_MAX_AGE_MS, 4 * 60 * 60 * 1000);
   assert.equal(isSessionExpired(session, new Date(signedInAt.getTime() + SESSION_MAX_AGE_MS - 1)), false);
 });
 
-test('a sessão expira ao completar oito horas mesmo no mesmo dia', () => {
+test('a sessão expira ao completar quatro horas mesmo no mesmo dia', () => {
   const signedInAt = new Date(2026, 7, 19, 8, 30);
   const session = sessionAt(signedInAt);
   assert.equal(isSessionExpired(session, new Date(signedInAt.getTime() + SESSION_MAX_AGE_MS)), true);

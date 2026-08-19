@@ -42,13 +42,13 @@ async function mockLoginAuth(page, { signupData = null, resendError = null, exis
   }));
 }
 
-test('sessão com mais de oito horas volta para o login', async ({ page }) => {
+test('sessão com mais de quatro horas volta para o login', async ({ page }) => {
   await mockLoginAuth(page, {
     existingSession: {
       access_token: 'mock-token',
       user: {
         id: 'old-user',
-        last_sign_in_at: new Date(Date.now() - 9 * 60 * 60 * 1000).toISOString()
+        last_sign_in_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString()
       }
     }
   });
