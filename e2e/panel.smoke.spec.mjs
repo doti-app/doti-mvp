@@ -15,6 +15,9 @@ test('carrega o painel local e navega pelas áreas principais', async ({ page })
   for (const pageId of ['demandas', 'aprovacoes', 'fluxos', 'clientes', 'curadoria-chatbot', 'equipe', 'whatsapp']) {
     await page.locator(`[data-page="${pageId}"]`).click();
     await expect(page.locator(`#${pageId}`)).toHaveClass(/active/);
+    if (pageId === 'demandas') {
+      await expect(page.locator('#demandas')).not.toContainText('Próximo prazo primeiro');
+    }
   }
 
   await page.locator('#profileSettingsEntry').click();

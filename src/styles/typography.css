@@ -1,0 +1,95 @@
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/fonts/inter/inter-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Marble";
+  src: url("/assets/fonts/marble/marble-regular.woff") format("woff");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Marble";
+  src: url("/assets/fonts/marble/marble-medium.woff") format("woff");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Marble";
+  src: url("/assets/fonts/marble/marble-semibold.woff") format("woff");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Marble";
+  src: url("/assets/fonts/marble/marble-bold.woff") format("woff");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Marble";
+  src: url("/assets/fonts/marble/marble-extrabold.woff") format("woff");
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+}
+
+:root {
+  --font-body: "Inter", Arial, sans-serif;
+  --font-title: "Marble", "Inter", Arial, sans-serif;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-body);
+}
+
+:where(h1, h2, h3, h4, h5, h6, [role="heading"]) {
+  font-family: var(--font-title);
+  text-wrap: balance;
+}
+
+:where(h1) {
+  font-weight: 500;
+}
+
+.workflow-card h2 {
+  font-weight: 600;
+}
+
+/*
+ * Aumenta a interface somente quando há espaço horizontal de sobra.
+ * O zoom preserva as proporções entre texto, controles e grids, evitando
+ * truncamentos causados por aumentar dezenas de tamanhos isoladamente.
+ */
+@media (min-width: 1440px) {
+  body { zoom: 1.04; }
+}
+
+@media (min-width: 1680px) {
+  body { zoom: 1.08; }
+}
+
+@media (min-width: 2200px) {
+  body { zoom: 1.12; }
+}
