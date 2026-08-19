@@ -1,3 +1,5 @@
+import { avatarImageUrl, resolveAvatarImageUrl, validAvatar } from '../../shared/profile-avatar.js';
+
 const roleLabels = {
   owner: 'Proprietário',
   admin: 'Administrador',
@@ -103,10 +105,8 @@ function localOwnerProfile() {
 }
 
 function memberAvatar(member) {
-  const avatarUrl = String(member.avatar_url || '');
-  const isPreset = /^\/assets\/avatars-users\/avatar-\d{2}\.png$/.test(avatarUrl);
-  const isLocalPhoto = /^data:image\/(jpeg|png|webp);base64,[a-z0-9+/=]+$/i.test(avatarUrl) && avatarUrl.length <= 900000;
-  if (isPreset || isLocalPhoto) {
+  const avatarUrl = String(member.avatar_image_url || avatarImageUrl(validAvatar(member.avatar_url)));
+  if (avatarUrl) {
     return `<img src="${escapeHtml(avatarUrl)}" alt="" loading="lazy">`;
   }
   return escapeHtml(initials(member.full_name));
@@ -434,6 +434,10 @@ async function loadTeam() {
   membersContainer.innerHTML = '<div class="team-loading">Carregando equipe…</div>';
   try {
     teamState = normalizeTeamState(await teamRequest());
+    teamState.members = await Promise.all(teamState.members.map(async member => ({
+      ...member,
+      avatar_image_url: await resolveAvatarImageUrl(member.avatar_url, authContext.supabase)
+    })));
     renderMetrics();
     renderMembers();
   } catch (error) {
