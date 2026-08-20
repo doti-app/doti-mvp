@@ -6,12 +6,12 @@
   <meta name="description" content="Doti — operação interna para agências de marketing">
   <title>Doti - Operação da agência</title>
   <link rel="icon" href="/assets/doti.png" type="image/png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preload" href="/assets/fonts/inter/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/assets/fonts/marble/marble-bold.woff" as="font" type="font/woff" crossorigin>
   <link rel="stylesheet" href="/src/styles/styles.css">
   <link rel="stylesheet" href="/src/styles/styles-extra.css">
   <link rel="stylesheet" href="/src/styles/functional.css">
+  <link rel="stylesheet" href="/src/styles/typography.css">
   <style>.auth-pending body{visibility:hidden}</style>
   <script src="/assets/vendor/supabase-2.57.4.js"></script>
   <script type="module" src="/src/app/bootstrap.js"></script>
@@ -100,7 +100,6 @@
         <section class="operation-summary" id="operationSummary"></section>
         <div class="toolbar">
           <div class="tabs"><button class="active" data-view="board">Quadro</button><button data-view="projects">Projetos</button><button data-view="calendar">Calendário</button></div>
-          <span class="sort-indicator">↕ Próximo prazo primeiro</span>
           <select class="filter group-filter" id="groupFilter" aria-label="Filtrar pelo grupo responsável">
             <option value="all">Todos os grupos</option>
           </select>
