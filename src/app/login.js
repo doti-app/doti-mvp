@@ -1,4 +1,5 @@
 import { authUrl, getAuthConfig, getSupabase } from '../shared/auth/supabase-client.js';
+import { getValidSession } from '../shared/auth/session-policy.js';
 
 /** @param {{ document?: Document, location?: Location }} [options] */
 export function createLoginPage(options = {}) {
@@ -455,7 +456,7 @@ async function initialize() {
       return;
     }
     supabase = await getSupabase();
-    const { data: { session } } = await supabase.auth.getSession();
+    const { session, expired } = await getValidSession(supabase);
     if (session && !['reset', 'invite'].includes(mode)) {
       location.replace(await authenticatedDestination());
       return;
@@ -469,7 +470,7 @@ async function initialize() {
     if (query.get('confirmed') === '1') {
       showStatus('E-mail confirmado. Sua conta está pronta para entrar.', 'success');
     }
-    if (query.get('reason') === 'expired') {
+    if (expired || query.get('reason') === 'expired') {
       showStatus('Sua sessão expirou. Entre novamente para continuar.', 'info');
     }
     if (query.get('error') === 'disabled') {

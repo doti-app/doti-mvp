@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-async function mockLoginAuth(page, { signupData, resendError = null }) {
+async function mockLoginAuth(page, { signupData = null, resendError = null, existingSession = null }) {
   await page.route('**/api/auth-config', route => route.fulfill({
     contentType: 'application/json',
     body: JSON.stringify({
@@ -13,11 +13,11 @@ async function mockLoginAuth(page, { signupData, resendError = null }) {
   await page.route('**/assets/vendor/supabase-2.57.4.js', route => route.fulfill({
     contentType: 'application/javascript',
     body: `
-      window.__authCalls = { signUp: [], resend: [] };
+      window.__authCalls = { signUp: [], resend: [], signOut: [] };
       window.supabase = {
         createClient: () => ({
           auth: {
-            getSession: async () => ({ data: { session: null } }),
+            getSession: async () => ({ data: { session: ${JSON.stringify(existingSession)} } }),
             signUp: async options => {
               window.__authCalls.signUp.push(options);
               return { data: ${JSON.stringify(signupData)}, error: null };
@@ -29,7 +29,10 @@ async function mockLoginAuth(page, { signupData, resendError = null }) {
             signInWithPassword: async () => ({ error: null }),
             resetPasswordForEmail: async () => ({ error: null }),
             updateUser: async () => ({ error: null }),
-            signOut: async () => ({ error: null })
+            signOut: async options => {
+              window.__authCalls.signOut.push(options);
+              return { error: null };
+            }
           },
           rpc: async () => ({ data: null, error: null }),
           functions: { invoke: async () => ({ data: null, error: null }) }
@@ -38,6 +41,23 @@ async function mockLoginAuth(page, { signupData, resendError = null }) {
     `
   }));
 }
+
+test('sessão com mais de quatro horas volta para o login', async ({ page }) => {
+  await mockLoginAuth(page, {
+    existingSession: {
+      access_token: 'mock-token',
+      user: {
+        id: 'old-user',
+        last_sign_in_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString()
+      }
+    }
+  });
+
+  await page.goto('/dot-admin/');
+
+  await expect(page.locator('#loginStatus')).toContainText('Sua sessão expirou. Entre novamente para continuar.');
+  await expect.poll(() => page.evaluate(() => window.__authCalls.signOut)).toEqual([{ scope: 'local' }]);
+});
 
 async function submitSignup(page, email = 'ana@agencia.test') {
   const password = 'senha-segura';

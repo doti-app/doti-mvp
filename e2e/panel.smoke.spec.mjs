@@ -226,7 +226,7 @@ test('renderiza o portal DOT autenticado com visão macro e diretórios', async 
         list_audit: { events: [] }
       };
       window.supabase = { createClient: () => ({
-        auth: { getSession: async () => ({ data: { session: { user: { id: 'staff-1' } } } }), signOut: async () => ({}) },
+        auth: { getSession: async () => ({ data: { session: { user: { id: 'staff-1', last_sign_in_at: new Date().toISOString() } } } }), signOut: async () => ({ error: null }) },
         rpc: async name => name === 'get_account_context' ? { data: { userId: 'staff-1', email: 'admin@doti.test', platform: { id: 'staff-1', email: 'admin@doti.test', fullName: 'Admin DOT', role: 'admin', isActive: true }, personalAgency: null }, error: null } : { data: null, error: null },
         functions: { invoke: async (_name, options) => ({ data: replies[options.body.action] || {}, error: null }) }
       }) };
