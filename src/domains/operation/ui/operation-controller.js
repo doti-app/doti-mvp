@@ -796,6 +796,7 @@ function openProjectModal(projectId = null) {
   openModal('Novo projeto', `
     <div class="form-grid"><label>Cliente<select name="clientId" required><option value="">Selecione um cliente</option>${clientOptions}</select></label><label>Projeto<input name="name" required maxlength="100" placeholder="Ex.: Campanha de lançamento"></label></div>
     <label>Prazo do projeto<input type="date" name="due" required><small>Esta data será aplicada automaticamente à última etapa de cada entregável.</small></label>
+    <label>Observações da demanda<textarea class="demand-note-input" name="note" rows="4" placeholder="Briefing, links, decisões ou orientações"></textarea><small>O conteúdo será incluído nas observações de cada entregável criado.</small></label>
     <fieldset class="service-picker"><legend>Fluxos contratados</legend>${options}</fieldset>
     <p class="form-hint">Cada fluxo selecionado criará um entregável independente com todas as etapas configuradas.</p>
   `, form => {
@@ -805,6 +806,7 @@ function openProjectModal(projectId = null) {
     const now = new Date().toISOString();
     const selectedClient = clientById(field(form, 'clientId'));
     if (!selectedClient) return false;
+    const initialNote = field(form, 'note').trim();
     const newProject = { id: projectIdNew, clientId: selectedClient.id, client: selectedClient.name, name: field(form, 'name').trim(), due: field(form, 'due'), createdAt: now, updatedAt: now };
     state.projects.unshift(newProject);
     selected.forEach(workflowId => {
@@ -816,7 +818,7 @@ function openProjectModal(projectId = null) {
       state.deliverables.unshift({
         id: uid('d'), projectId: projectIdNew, workflowId, name: workflow.name, category: workflow.category,
         color: workflow.color, due: '', status: 'active', stepIndex: 0, createdAt: now,
-        steps: instantiatedSteps, attachments: [], links: [], note: ''
+        steps: instantiatedSteps, attachments: [], links: [], note: initialNote
       });
     });
     logActivity('Projeto criado', `${newProject.name} · ${newProject.client}`);
