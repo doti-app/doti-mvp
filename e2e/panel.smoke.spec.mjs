@@ -26,6 +26,51 @@ test('carrega o painel local e navega pelas áreas principais', async ({ page })
   expect(consoleErrors).toEqual([]);
 });
 
+test('leva as observações da nova demanda para todos os entregáveis criados', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('doti-agency-live-v4', JSON.stringify({
+      version: 4, revision: 0, initialized: true,
+      groups: [{ id: 'g-atendimento', name: 'Atendimento', initials: 'AT' }],
+      workflows: [{
+        id: 'wf-site', name: 'Site institucional', category: 'Site', description: '', color: 'site', active: true,
+        steps: [['Briefing', 'g-atendimento', 'ws-briefing'], ['Publicação', 'g-atendimento', 'ws-publicacao']]
+      }],
+      clients: [{ id: 'client-teste', name: 'Cliente Teste', color: '#ffd400' }],
+      projects: [], deliverables: [], activity: []
+    }));
+  });
+
+  const pageErrors = [];
+  const consoleErrors = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
+  page.on('console', message => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+
+  await page.goto('/#demandas');
+  await page.locator('#newDemand').click();
+  const modal = page.locator('.doti-modal');
+  await modal.locator('select[name="clientId"]').selectOption('client-teste');
+  await modal.locator('input[name="name"]').fill('Novo site');
+  await modal.locator('input[name="due"]').fill('2026-09-30');
+  await modal.locator('textarea[name="note"]').fill('Usar o briefing aprovado e a referência https://example.com/site');
+  await modal.locator('input[name="workflows"][value="wf-site"]').check();
+  await modal.locator('button[type="submit"]').click();
+
+  const demand = page.locator('[data-open-deliverable]').filter({ hasText: 'Site institucional' });
+  await expect(demand).toBeVisible();
+  await demand.click();
+  await expect(page.locator('[data-note-editor]')).toContainText('Usar o briefing aprovado e a referência https://example.com/site');
+
+  const persistedNote = await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem('doti-agency-live-v4'));
+    return state.deliverables.find(item => item.name === 'Site institucional')?.note;
+  });
+  expect(persistedNote).toBe('Usar o briefing aprovado e a referência https://example.com/site');
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+});
+
 test('cliente acessa somente suas aprovações e devolve a demanda para ajustes', async ({ page }) => {
   await page.addInitScript(state => {
     localStorage.setItem('doti-agency-live-v4', JSON.stringify(state));
